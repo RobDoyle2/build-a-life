@@ -237,6 +237,7 @@
     if (age >= 3) { life.stats.smarts = clamp(30 + age * 2 + randInt(0, 10)); life.stats.fitness = randInt(35, 60); }
 
     if (G.ensureEconomy) G.ensureEconomy(life);
+    if (G.ensureWorld) G.ensureWorld(life);
     resetYear(life);
     addLog(life, age === 0 ? 'Born in ' + G.town(life).name + '! Welcome to the world, ' + life.name + '.' : life.name + ' starts their own story at age ' + age + '.', age === 0 ? '👶' : '🌟');
     return life;

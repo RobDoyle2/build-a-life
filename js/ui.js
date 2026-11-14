@@ -119,6 +119,8 @@
       pk.classList.add('on');
       return;
     }
+    var tb = e.target.closest('[data-mbtn-trip]');
+    if (tb) { var tid = tb.getAttribute('data-mbtn-trip'); stopSpeaking(); nextModal(); var lt = life(); if (lt) { S.tab = 'explore'; act('dayTrip', tid); } return; }
     var rn = e.target.closest('[data-randname]');
     if (rn) { var inp = $modal.querySelector('input[name="n"]'); if (inp) inp.value = rn.getAttribute('data-randname') === 'pet' ? G.pick(BAL.NAMES.pets) : G.randomName(pickedVal('g') || 'any'); }
   }
@@ -451,8 +453,12 @@
     return edCard('👪 Your family', '<div class="pick-row">' + BAL.FAMILY_TYPES.map(function (f) {
       return '<button class="pick chip' + (e.familyType === f.id ? ' on' : '') + '" data-act="edSet"' + a('k', 'familyType') + a('v', f.id) + '>' + f.emoji + ' ' + esc(f.name) + '</button>';
     }).join('') + '</div>') +
-      edCard('📍 Where will you be born?', '<div class="town-grid">' + BAL.TOWNS.map(function (t) {
-        return '<button class="town-card' + (t.id === e.townId ? ' on' : '') + '" data-act="edSet"' + a('k', 'townId') + a('v', t.id) + ' style="--t1:' + t.colors[0] + ';--t2:' + t.colors[1] + '"><span class="town-emoji">' + t.emoji + '</span><b>' + esc(t.name) + '</b><small>' + esc(t.kind) + '</small><span class="town-desc">' + esc(t.desc) + '</span></button>';
+      edCard('📍 Where will you live?', '<div class="pick-row type-filter">' + [{ id: 'all', name: 'Everywhere', emoji: '🌍' }].concat(BAL.TOWN_TYPES).map(function (ty) {
+        var n = ty.id === 'all' ? BAL.TOWNS.length : BAL.TOWNS.filter(function (t) { return t.type === ty.id; }).length;
+        return '<button class="pick chip small' + ((S.townType || 'all') === ty.id ? ' on' : '') + '" data-act="townType"' + a('v', ty.id) + '>' + ty.emoji + ' ' + ty.name + ' <small>' + n + '</small></button>';
+      }).join('') + '</div><div class="town-grid">' + BAL.TOWNS.filter(function (t) { return !S.townType || S.townType === 'all' || t.type === S.townType; }).map(function (t) {
+        var specials = G.townMap(t.id).places.filter(function (p) { return G.place(p.id).special || p.id === 'harbour'; }).map(function (p) { return G.place(p.id).emoji; }).join(' ');
+        return '<button class="town-card' + (t.id === e.townId ? ' on' : '') + '" data-act="edSet"' + a('k', 'townId') + a('v', t.id) + ' style="--t1:' + t.colors[0] + ';--t2:' + t.colors[1] + '"><span class="town-emoji">' + t.emoji + '</span><b>' + esc(t.name) + '</b><small>' + esc(t.kind) + '</small><span class="town-desc">' + esc(t.desc) + '</span>' + (specials ? '<span class="town-specials">Special places: ' + specials + '</span>' : '') + '</button>';
       }).join('') + '</div>');
   }
 
@@ -503,7 +509,7 @@
     { id: 'shop', name: 'Shop', emoji: '🛍️', color: '#9775FA' },
     { id: 'health', name: 'Health', emoji: '🏥', color: '#FF5D73' },
     { id: 'chores', name: 'Daily Jobs', emoji: '✅', color: '#20C997' },
-    { id: 'towns', name: 'Places', emoji: '🗺️', color: '#3A86FF' },
+    { id: 'explore', name: 'Explore', emoji: '🗺️', color: '#3A86FF' },
     { id: 'story', name: 'My Story', emoji: '📖', color: '#F59F00' }
   ];
 
@@ -560,6 +566,7 @@
       case 'towns': return panelTowns(l);
       case 'story': return panelStory(l);
       case 'money': return panelMoney(l);
+      case 'explore': return panelExplore(l);
       default: return panelActivities(l);
     }
   }
@@ -927,7 +934,7 @@
   function panelTowns(l) {
     var lvl = function (v) { return v >= 1.3 ? 'High' : v >= 1 ? 'Medium' : 'Low'; };
     var stat = function (id) { return statInfo(id).emoji + ' ' + statInfo(id).name; };
-    return head('🗺️', 'Towns, Cities & Villages', 'Every place is different! Grown-ups can move.') +
+    return head('🏘️', 'Towns, Cities, Villages & Islands', 'Every place is different! Grown-ups can move. ' + btn('🗺️ Back to the map', 'tab', a('id', 'explore'), 'small')) +
       '<div class="town-grid big">' + BAL.TOWNS.map(function (t) {
         var here = t.id === l.townId;
         return '<div class="town-card' + (here ? ' on' : '') + '" style="--t1:' + t.colors[0] + ';--t2:' + t.colors[1] + '"><span class="town-emoji">' + t.emoji + '</span><b>' + esc(t.name) + '</b><small>' + esc(t.kind) + '</small><span class="town-desc">' + esc(t.desc) + '</span>' +
@@ -991,6 +998,156 @@
       '<div class="card next-card"><b>🧑‍🤝‍🧑 My characters</b><p class="small">Play one of your other saved characters.</p>' + btn('🧑‍🤝‍🧑 Characters', 'goChars', '', 'big') + '</div>' +
       '<div class="card next-card"><b>👥 Switch player</b><p class="small">Let someone else have a turn.</p>' + btn('👥 Players', 'goProfiles', '', 'big') + '</div>' +
       '</div></div></main>';
+  }
+
+  /* ====================== Explore: the interactive world ====================== */
+  var ROLE_ACT = {
+    gp: { label: '🩺 Ask for a check-up', fn: 'clinic', arg: 'gp' }, dentist: { label: '🦷 Check my teeth', fn: 'clinic', arg: 'dentist' },
+    nurse: { label: '🏥 Get treatment', fn: 'clinic', arg: 'hospital' }, surgeon: { label: '🏥 Get treatment', fn: 'clinic', arg: 'hospital' },
+    reception: { label: '💉 Book a flu jab', fn: 'clinic', arg: 'jab' }, shopkeeper: { label: '🛍️ Browse the shop', shop: 'toys' },
+    cashier: { label: '🧺 Do the food shop', shop: 'groceries' }, barista: { label: '☕ Order a hot chocolate', obj: 'cocoa' },
+    stylist: { label: '✂️ Get a haircut', fn: 'haircut' }, shelter: { label: '🐾 Meet the animals', tab: 'pets' },
+    adviser: { label: '🏢 Look for a job', tab: 'school' }, boss: { label: '💪 Work hard', fn: 'workHard', needs: 'job' },
+    teacher: { label: '📚 Study hard', fn: 'study' }, librarian: { label: '🛠️ Learn a skill', tab: 'school' },
+    guard: { label: '🎫 Buy a ticket', trips: true }, captain: { label: '🎫 Buy a ferry ticket', trips: true },
+    waiter: { label: '🍝 Order a meal', fn: 'mealOut' }, lifeguard: { label: '🏊 Go swimming', activity: ['swim'] }
+  };
+
+  function placeAct(l, x) {
+    // turns an action description into a button
+    if (x.needs === 'job' && !l.job) return '';
+    if (x.needs === 'business' && !l.business) return '';
+    if (x.partner && !G.partner(l)) return '';
+    var attrs = '';
+    if (x.fn) attrs = a('fn', x.fn) + (x.arg ? a('a1', x.arg) : '');
+    if (x.tab) attrs = a('tab', x.tab);
+    if (x.shop) attrs = a('shop', x.shop);
+    if (x.look) attrs = a('look', x.look === true ? 'clothes' : x.look);
+    if (x.trips) attrs = a('trips', 1);
+    if (x.activity) {
+      var act2 = G.activities(l).find(function (q) { return x.activity.indexOf(q.id) >= 0; });
+      if (!act2) return '';
+      attrs = a('fn', 'activity') + a('a1', act2.id);
+    }
+    if (x.obj) attrs = a('obj', x.obj);
+    return btn(x.label + (x.fn && ['workHard', 'study', 'activity', 'makeFriend', 'workBusiness', 'mealOut', 'date'].indexOf(x.fn) >= 0 ? ' <small>⚡1</small>' : ''), 'placeAct', attrs, 'small');
+  }
+
+  function travelBar(l) {
+    var w = G.ensureWorld(l);
+    if (l.age < 1) return '<div class="travel-bar"><span class="muted small">👶 Mum or Dad pushes you in the pram!</span></div>';
+    return '<div class="travel-bar"><span class="tb-label">Travel by:</span>' + G.travelModes(l).map(function (m) {
+      var fare = G.fare(l, m.id);
+      return '<button class="pick chip small' + (w.mode === m.id ? ' on' : '') + '" data-act="mode"' + a('id', m.id) + '>' + m.emoji + ' ' + m.name + (fare ? ' <small>🪙' + fare + '</small>' : '') + '</button>';
+    }).join('') + '</div>';
+  }
+
+  function mapHtml(l, map) {
+    var w = G.ensureWorld(l);
+    var cells = map.places.map(function (p) {
+      var pl = G.place(p.id), here = w.loc === p.id;
+      var seen = (w.visited[map.town.id] || []).indexOf(p.id) >= 0;
+      return '<button class="tile-place' + (here ? ' here' : '') + (pl.special ? ' special' : '') + '" data-act="go"' + a('id', p.id) + ' style="grid-column:' + (p.x + 1) + ';grid-row:' + (p.y + 1) + ';--pc:' + pl.color + '" aria-label="Go to ' + esc(G.locLabel(l, map, p.id)) + '">' +
+        '<span class="tp-emoji">' + G.locEmoji(l, p.id) + '</span><span class="tp-name">' + esc(p.id === 'home' ? (G.isVisiting(l) ? 'Visitor Centre' : 'Home') : (p.name || pl.name)) + '</span>' + (seen ? '' : '<span class="tp-new">NEW</span>') + '</button>';
+    }).join('') + map.decor.map(function (d) { return '<span class="tile-decor" style="grid-column:' + (d.x + 1) + ';grid-row:' + (d.y + 1) + '" aria-hidden="true">' + d.decor + '</span>'; }).join('');
+    var at = G.mapPlace(map, w.loc) || G.mapPlace(map, 'home');
+    var pos = S.travelAnim ? S.travelAnim.from : at;
+    var marker = '<div class="map-me' + (S.travelAnim ? ' walking' : '') + '" id="mapme" style="left:' + ((pos.x + 0.5) / map.cols * 100) + '%;top:' + ((pos.y + 0.5) / map.rows * 100) + '%">' +
+      '<span class="me-mode">' + (S.travelAnim ? S.travelAnim.emoji : '') + '</span>' + BAL.avatar(l.look, l.age, l.stats.happy, { full: true }) + '</div>';
+    return '<div class="map-wrap type-' + map.type + '"><div class="map" style="grid-template-columns:repeat(' + map.cols + ',1fr);grid-template-rows:repeat(' + map.rows + ',1fr)">' + cells + marker + '</div></div>';
+  }
+
+  function sceneHtml(l, map) {
+    var w = G.ensureWorld(l), id = w.loc, pl = G.place(id), town = G.currentTown(l);
+    var ppl = G.placePeople(l, town, id);
+    var objs = G.placeObjects(l, id);
+    var acts = (pl.acts || []).map(function (x) { return placeAct(l, x); }).join('');
+    if (id === 'home' && G.isVisiting(l)) acts = btn('🏡 Go home', 'goHome', '', 'small primary') + btn('🚆 Another day trip', 'placeAct', a('trips', 1), 'small');
+    return '<div class="scene card pop" style="--pc:' + pl.color + '"><div class="scene-head"><span class="scene-emoji">' + G.locEmoji(l, id) + '</span><div><h3>' + esc(G.locLabel(l, map, id)) + '</h3><p>' + esc(id === 'home' && G.isVisiting(l) ? 'Maps, leaflets and a friendly welcome to ' + map.town.name + '.' : pl.desc) + '</p></div></div>' +
+      (ppl.length ? '<h4>👋 People here <small>(tap to chat)</small></h4><div class="scene-people">' + ppl.map(function (n) {
+        return '<button class="npc" data-act="talk"' + a('id', n.id) + '><span class="npc-av">' + BAL.avatar(n.look, n.age, 80, { bg: '#fff' }) + '</span><b>' + esc(n.name) + '</b><small>' + n.emoji + ' ' + esc(n.title) + '</small></button>';
+      }).join('') + '</div>' : '') +
+      (objs.length ? '<h4>✨ Things to try <small>(tap them!)</small></h4><div class="scene-objs">' + objs.map(function (o) {
+        var cost = o.coins && o.coins < 0 ? Math.round(-o.coins * (l.age >= 16 ? G.town(l).price : 1)) : 0;
+        return '<button class="obj" data-act="obj"' + a('id', o.id) + '><span class="obj-emoji">' + o.emoji + '</span><span>' + esc(o.name) + '</span>' + (cost ? '<small>🪙' + cost + '</small>' : '') + '</button>';
+      }).join('') + '</div>' : '') +
+      (acts ? '<h4>🎯 Things to do</h4><div class="btn-row">' + acts + '</div>' : '') + '</div>';
+  }
+
+  function panelExplore(l) {
+    var map = G.townMap(G.currentTown(l));
+    var t = map.town, type = byId(BAL.TOWN_TYPES, t.type);
+    var visiting = G.isVisiting(l);
+    var w = G.ensureWorld(l);
+    var seen = (w.visited[t.id] || []).length;
+    return head(t.emoji, esc(t.name), esc(t.kind) + ' · ' + seen + ' of ' + map.places.length + ' places explored' + (visiting ? ' · <b>on a day trip!</b>' : '')) +
+      (visiting ? '<div class="tip trip-tip">🎒 You\'re on a day trip to ' + esc(t.name) + '! ' + btn('🏡 Go home to ' + esc(G.town(l).name), 'goHome', '', 'small primary') + '</div>' : '') +
+      travelBar(l) + '<div class="explore">' + mapHtml(l, map) + sceneHtml(l, map) + '</div>' +
+      '<div class="btn-row">' + btn('🚆 Day trip to another town', 'placeAct', a('trips', 1)) + btn('🏘️ Compare towns' + (l.age >= 18 ? ' & move' : ''), 'tab', a('id', 'towns'), 'ghost') + '</div>' +
+      '<p class="small muted">' + type.emoji + ' Tip: tap a place on the map to travel there. Tap people to chat and things to try them out!</p>';
+  }
+
+  function goTo(l, placeId) {
+    var w = G.ensureWorld(l), map = G.townMap(G.currentTown(l));
+    var from = G.mapPlace(map, w.loc) || G.mapPlace(map, 'home');
+    var res = G.run(l, 'travel', placeId, w.mode);
+    if (!res.ok) { feedback(res); return; }
+    var to = G.mapPlace(map, placeId);
+    var ms = reduced() ? 0 : Math.min(2200, Math.max(500, res.dist * 380 / res.speed));
+    var mode = byId(BAL.TRAVEL, w.mode);
+    S.travelAnim = { from: from, to: to, ms: ms, emoji: l.age < 1 ? '👶' : (mode ? mode.emoji : '🚶') };
+    save(); render();
+    var me = document.getElementById('mapme');
+    if (!me || !ms) { S.travelAnim = null; feedback(res); return; }
+    me.style.transition = 'left ' + ms + 'ms ease-in-out, top ' + ms + 'ms ease-in-out';
+    requestAnimationFrame(function () { requestAnimationFrame(function () {
+      me.style.left = ((to.x + 0.5) / map.cols * 100) + '%';
+      me.style.top = ((to.y + 0.5) / map.rows * 100) + '%';
+    }); });
+    BAL.sound('click');
+    setTimeout(function () { S.travelAnim = null; feedback(res); }, ms + 60);
+  }
+
+  function talkTo(l, npcId) {
+    var w = G.ensureWorld(l);
+    var res = G.run(l, 'talk', w.loc, npcId);
+    if (!res.ok) { feedback(res); return; }
+    var n = res.npc;
+    save(); render();
+    BAL.sound('good');
+    goalFeedback(res.goalsDone);
+    var buttons = [];
+    var ra = ROLE_ACT[n.role];
+    if (n.mine && n.personId) buttons.push({ label: '💞 Spend time together <small>⚡1</small>', fn: function () { act('spendTime', n.personId); } });
+    if (n.befriend && !l.people.some(function (p) { return p.townsId === n.id; }) && l.age >= 3) buttons.push({ label: '🤝 Be friends! <small>⚡1</small>', cls: 'pink', fn: function () { act('befriend', w.loc, n.id); } });
+    if (ra && !(ra.needs === 'job' && !l.job) && !(ra.fn === 'study' && !(G.school(l) && G.school(l).kind !== 'nursery'))) {
+      buttons.push({ label: ra.label, fn: function () { setTimeout(function () { runPlaceAct(l, ra); }, 30); } });
+    }
+    buttons.push({ label: 'Bye! 👋', cls: 'ghost' });
+    openModal({ cls: 'chat', title: esc(n.name), emoji: '<span class="chat-av">' + BAL.avatar(n.look, n.age, 85, { bg: '#fff' }) + '</span>',
+      html: '<p class="muted">' + n.emoji + ' ' + esc(n.title) + '</p><div class="bubble">' + esc(res.line) + '</div>', buttons: buttons });
+  }
+
+  function tripsModal(l) {
+    var here = G.currentTown(l);
+    var towns = BAL.TOWNS.filter(function (t) { return t.id !== here; });
+    openModal({ emoji: '🎫', title: 'Where shall we go?', cls: 'trips',
+      html: '<p>Take a day trip! You\'ll be back home by your birthday.' + (l.age < 16 ? ' (Children travel cheaper.)' : '') + '</p><div class="trip-grid">' + towns.map(function (t) {
+        var tc = G.tripCost(l, t.id), mine = t.id === l.townId;
+        return '<button class="trip" data-mbtn-trip="' + t.id + '" style="--t1:' + t.colors[0] + ';--t2:' + t.colors[1] + '"><span class="trip-emoji">' + t.emoji + '</span><b>' + esc(t.name) + (mine ? ' 🏡' : '') + '</b><small>' + esc(t.kind) + '</small><span class="trip-cost">' + tc.emoji + ' 🪙 ' + fmt(tc.cost) + '</span></button>';
+      }).join('') + '</div>',
+      buttons: [{ label: 'Not today', cls: 'ghost' }] });
+  }
+
+  function runPlaceAct(l, x) {
+    if (x.tab) { S.tab = x.tab; BAL.sound('click'); render(); var pnl = document.getElementById('panel'); if (pnl) pnl.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' }); return; }
+    if (x.shop) { S.tab = 'shop'; S.shopCat = x.shop; BAL.sound('click'); render(); return; }
+    if (x.look) { startLookEditor(x.look === true ? 'clothes' : x.look); return; }
+    if (x.trips) { tripsModal(l); return; }
+    if (x.obj) { act('useObject', G.ensureWorld(l).loc, x.obj); return; }
+    if (x.activity) { var q = G.activities(l).find(function (z) { return x.activity.indexOf(z.id) >= 0; }); if (q) act('activity', q.id); return; }
+    if (x.fn === 'date') { var p = G.partner(l); if (p) act('date', p.id); return; }
+    if (x.fn) act(x.fn, x.arg);
   }
 
   /* ====================== Challenges ====================== */
@@ -1279,10 +1436,27 @@
         BAL.sound('good'); render(); break;
       }
       case 'edSave': edSave(); break;
+      case 'townType': S.townType = d('v'); BAL.sound('click'); render(); break;
       case 'edCancel': S.ed = null; S.screen = 'game'; BAL.sound('click'); render(); break;
       case 'tab': S.tab = d('id'); BAL.sound('click'); render(); var pn = document.getElementById('panel'); if (pn && window.innerWidth < 900) pn.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' }); break;
       case 'shopCat': S.shopCat = d('id'); BAL.sound('click'); render(); break;
       case 'ageUp': ageUp(); break;
+      case 'go': if (!S.travelAnim) goTo(l, d('id')); break;
+      case 'mode': G.ensureWorld(l).mode = d('id'); save(); BAL.sound('click'); render(); break;
+      case 'talk': talkTo(l, d('id')); break;
+      case 'obj': act('useObject', G.ensureWorld(l).loc, d('id')); break;
+      case 'goHome': act('goHome'); break;
+      case 'placeAct': {
+        var px = {};
+        if (d('fn')) { px.fn = d('fn'); px.arg = d('a1'); if (px.fn === 'activity') { act('activity', px.arg); break; } }
+        if (d('tab')) px.tab = d('tab');
+        if (d('shop')) px.shop = d('shop');
+        if (d('look')) px.look = d('look');
+        if (d('trips')) px.trips = true;
+        if (d('obj')) px.obj = d('obj');
+        runPlaceAct(l, px);
+        break;
+      }
       case 'playGame': playGame(+d('i')); break;
       case 'swapGoal': act('swapGoal', +d('i')); break;
       case 'goGoal': {
@@ -1365,6 +1539,7 @@
       '<li><span>🪙</span> Earn coins from jobs (you can have up to 3!), side jobs, odd jobs or your own business. Spend them on food, homes, cars, furniture, pets, toys and parties. Coins are pretend — no real money!</li>' +
       '<li><span>🛟</span> Run out of coins? Don\'t panic — the 🪙 Money tab has a rescue plan, and there are always odd jobs to do.</li>' +
       '<li><span>🐾</span> Adopt pets, make friends, fall in love and build a family.</li>' +
+      '<li><span>🗺️</span> Open <b>Explore</b> to travel around your town on the map, chat to people, try things out and take day trips to other towns and islands.</li>' +
       '<li><span>🪞</span> Tap <b>Change Your Look</b> to change clothes, hair and accessories any time — it\'s free!</li>' +
       '<li><span>🧑‍🤝‍🧑</span> Each player can save lots of <b>characters</b>, and every character has their own life.</li>' +
       '<li><span>📖</span> Collect stickers in your Sticker Book.</li>' +

@@ -7,6 +7,7 @@ await import('../js/wardrobe.js');
 await import('../js/game.js');
 await import('../js/challenges.js');
 await import('../js/economy.js');
+await import('../js/world.js');
 await import('../js/avatar.js');
 await import('../js/storage.js');
 const BAL = globalThis.BAL;
@@ -370,6 +371,12 @@ function solveYear(l) {
     if (acts.includes('study')) { G.run(l, 'study'); continue; }
     if (acts.includes('joinClub')) { G.run(l, 'joinClub', BAL.CLUBS.find(x => !l.edu.clubs.includes(x.id)).id); continue; }
     if (acts.includes('partTime')) { G.run(l, 'partTime', 'paper'); continue; }
+    if (acts.includes('travel')) { const m = G.townMap(G.currentTown(l)); const dest = m.places.find(p => p.id !== l.world.loc); G.run(l, 'travel', dest.id); continue; }
+    if (acts.includes('talk')) {
+      const m = G.townMap(G.currentTown(l));
+      for (const p of m.places) { const ppl = G.placePeople(l, G.currentTown(l), p.id).filter(n => l.world.talked[n.id] !== l.age); if (ppl.length) { if (l.world.loc !== p.id) G.run(l, 'travel', p.id); G.run(l, 'talk', p.id, ppl[0].id); break; } }
+      continue;
+    }
     if (acts.includes('oddJob')) { G.run(l, 'oddJob', G.oddJobs(l)[0].id); continue; }
     if (acts.includes('payBack')) { if (!l.coins) G.run(l, 'oddJob', G.oddJobs(l)[0].id); else G.run(l, 'payBack'); continue; }
     if (acts.includes('workHard')) { G.run(l, 'workHard'); continue; }
@@ -644,4 +651,97 @@ test('older saves get the economy added', () => {
   assert.equal(l.partTime, undefined);
   assert.equal(Object.keys(l.skills).length, BAL.SKILLS.length);
   assert.equal(l.owed, 0);
+});
+
+/* ---------------- The interactive world ---------------- */
+
+test('there are towns, cities, villages, seaside towns and islands to live in', () => {
+  const types = new Set(BAL.TOWNS.map(t => t.type));
+  for (const ty of ['town', 'city', 'village', 'seaside', 'island']) assert.ok(types.has(ty), ty);
+  lucky();
+  const l = G.newLife({ name: 'Isla', townId: 'coral' });
+  assert.equal(G.town(l).type, 'island');
+});
+
+test('every town has all the essential places, laid out on a map', () => {
+  const needed = ['home', 'school', 'hospital', 'surgery', 'shops', 'supermarket', 'park', 'cafe', 'restaurant', 'shelter', 'work', 'salon'];
+  for (const t of BAL.TOWNS) {
+    const m = G.townMap(t.id);
+    const ids = m.places.map(p => p.id);
+    for (const id of needed) assert.ok(ids.includes(id), `${t.id} has ${id}`);
+    assert.ok(ids.includes('station') || ids.includes('harbour'), t.id + ' can be travelled to');
+    const cells = m.places.map(p => p.x + ',' + p.y).concat(m.decor.map(d => d.x + ',' + d.y));
+    assert.equal(new Set(cells).size, cells.length, t.id + ' no two places share a spot');
+    assert.deepEqual(G.townMap(t.id), m, 'the map stays the same every time');
+    if (t.type === 'island') assert.ok(ids.includes('beach') && ids.includes('lighthouse'));
+  }
+});
+
+test('characters travel between places, and transport costs make sense', () => {
+  lucky();
+  const l = G.newLife({ name: 'Wren', age: 25, townId: 'bubble' });
+  l.coins = 100;
+  assert.equal(l.world.loc, 'home');
+  const r = G.run(l, 'travel', 'park', 'walk');
+  assert.ok(r.ok);
+  assert.equal(l.world.loc, 'park');
+  assert.equal(G.run(l, 'travel', 'park').ok, false, 'already there');
+  const c = l.coins;
+  assert.ok(G.run(l, 'travel', 'cafe', 'bus').ok);
+  assert.ok(l.coins < c, 'grown-ups pay the bus fare');
+  assert.ok(!G.travelModes(l).some(m => m.id === 'car'), 'no car yet');
+  const kid = G.newLife({ name: 'Kit', age: 8 });
+  const kc = kid.coins;
+  assert.ok(G.run(kid, 'travel', 'school', 'bus').ok);
+  assert.equal(kid.coins, kc, 'buses are free for children');
+});
+
+test('objects and people are interactive', () => {
+  lucky();
+  const l = G.newLife({ name: 'Pip', age: 9, townId: 'pebble' });
+  G.run(l, 'travel', 'park');
+  const h = l.stats.happy;
+  assert.ok(G.run(l, 'useObject', 'park', 'ducks').ok);
+  assert.ok(l.stats.happy > h || h === 100);
+  const h2 = l.stats.happy;
+  const again = G.run(l, 'useObject', 'park', 'ducks');
+  assert.ok(again.ok && /already/.test(again.msg) && l.stats.happy === h2, 'the boost works once a year');
+  assert.equal(G.run(l, 'useObject', 'beach', 'shells').ok, false, 'you must be there');
+  const ppl = G.placePeople(l, 'pebble', 'park');
+  assert.ok(ppl.length >= 2);
+  const t = G.run(l, 'talk', 'park', ppl[0].id);
+  assert.ok(t.ok && t.line);
+  const local = ppl.find(n => n.befriend);
+  assert.ok(G.run(l, 'befriend', 'park', local.id).ok);
+  const f = l.people.find(p => p.townsId === local.id);
+  assert.equal(f.name, local.firstName, 'the same person becomes your friend');
+  assert.equal(G.run(l, 'befriend', 'park', local.id).ok, false);
+  assert.ok(G.placePeople(l, 'pebble', 'park').some(n => n.personId === f.id), 'friends hang out at the park');
+  G.run(l, 'travel', 'surgery');
+  assert.ok(G.placePeople(l, 'pebble', 'surgery').some(n => /^Dr /.test(n.name)), 'there is a doctor at the surgery');
+});
+
+test('day trips to other towns and islands, home again for the birthday', () => {
+  lucky();
+  const l = G.newLife({ name: 'Rio', age: 12, townId: 'maple' });
+  l.coins = 200;
+  G.run(l, 'travel', 'station');
+  assert.ok(G.run(l, 'dayTrip', 'puffin').ok);
+  assert.equal(G.currentTown(l), 'puffin');
+  assert.equal(l.world.loc, 'harbour');
+  assert.ok(l.achievements.includes('island'));
+  assert.ok(G.run(l, 'travel', 'lighthouse').ok);
+  assert.ok(G.run(l, 'useObject', 'lighthouse', 'telescope').ok);
+  assert.ok(G.isVisiting(l));
+  G.ageUp(l, { force: true });
+  assert.equal(G.isVisiting(l), false);
+  assert.equal(l.world.loc, 'home');
+});
+
+test('visiting every place earns the explorer sticker', () => {
+  lucky();
+  const l = G.newLife({ name: 'Ola', age: 10, townId: 'sunny' });
+  for (const p of G.townMap('sunny').places) if (p.id !== l.world.loc) G.run(l, 'travel', p.id);
+  G.run(l, 'travel', 'home');
+  assert.ok(l.achievements.includes('explorer'));
 });
