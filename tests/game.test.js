@@ -10,6 +10,7 @@ await import('../js/economy.js');
 await import('../js/world.js');
 await import('../js/family.js');
 await import('../js/pets.js');
+await import('../js/everyday.js');
 await import('../js/avatar.js');
 await import('../js/storage.js');
 const BAL = globalThis.BAL;
@@ -392,6 +393,7 @@ function solveYear(l) {
     if (acts.includes('payBack')) { if (!l.coins) G.run(l, 'oddJob', G.oddJobs(l)[0].id); else G.run(l, 'payBack'); continue; }
     if (acts.includes('workHard')) { G.run(l, 'workHard'); continue; }
     if (acts.includes('playPet')) { G.run(l, 'playPet', l.pets[0].id); continue; }
+    if (c.id.startsWith('super_day_')) { liveDay(l); continue; }
     // state challenges
     if (['ya_job', 'ad_findwork'].includes(c.id)) { G.run(l, 'applyJob', 'shop'); continue; }
     if (c.id === 'ya_moveout') { G.run(l, 'rentHome', 'tinyflat'); continue; }
@@ -402,6 +404,22 @@ function solveYear(l) {
     G.run(l, 'activity', best.id);
   }
   assert.ok(G.canAgeUp(l), `stuck at age ${l.age}: ${JSON.stringify(l.goals)}`);
+}
+
+// Plays one day of My Day properly: every important task, then sleep.
+const BALANCED = { veg: '🥦', protein: '🥚', carbs: '🍝', drink: '💧' };
+function liveDay(l) {
+  for (const x of G.routine(l)) {
+    if (x.done || !x.task.core) continue;
+    const t = x.task;
+    if (t.kind === 'game') assert.ok(G.run(l, 'doTask', t.id, { score: 1, total: 1 }).ok, t.id);
+    else if (t.kind === 'meal') assert.ok(G.run(l, 'doTask', t.id, { items: BALANCED }).ok, t.id);
+    else if (t.kind === 'moment') assert.ok(G.run(l, 'doTask', t.id, { choice: 0 }).ok, t.id);
+    else if (t.kind === 'auto') assert.ok(G.run(l, 'doTask', t.id).ok, t.id);
+    else if (t.id === 'jobhunt') { l.energy = Math.max(1, l.energy); assert.ok(G.run(l, 'oddJob', G.oddJobs(l)[0].id).ok, 'odd job counts as looking for work'); }
+  }
+  assert.equal(G.coreLeft(l), 0, 'all important tasks can always be done');
+  return G.run(l, 'sleep');
 }
 
 test('there are eight life stages', () => {
@@ -986,4 +1004,144 @@ test('every pet and look draws properly', () => {
 
 test('every town has a vet', () => {
   for (const t of BAL.TOWNS) assert.ok(G.townMap(t.id).places.some(p => p.id === 'vet'), t.id);
+});
+
+/* ---------------- Everyday life ---------------- */
+
+test('a day has morning, daytime, evening and night tasks for every age', () => {
+  lucky();
+  for (const age of [1, 4, 9, 15, 25, 70]) {
+    const l = G.newLife({ name: 'D' + age, age });
+    if (age === 25) { l.coins = 99; G.run(l, 'applyJob', 'shop'); }
+    const r = G.routine(l);
+    const phases = new Set(r.map(x => x.task.phase));
+    for (const ph of ['morning', 'day', 'evening']) assert.ok(phases.has(ph), `age ${age} has ${ph}`);
+    assert.ok(r.some(x => x.task.core), 'important tasks');
+    const res = liveDay(l);
+    assert.ok(res.ok && res.summary.superDay, `age ${age} can have a Super Day`);
+  }
+});
+
+test('the important everyday activities are all there', () => {
+  lucky();
+  const kid = G.newLife({ name: 'Kid', age: 9 });
+  const ids = G.routine(kid).map(x => x.task.id);
+  for (const id of ['brushAM', 'wash', 'breakfast', 'school', 'dinner', 'tidy', 'homework', 'brushPM']) assert.ok(ids.includes(id), id);
+  const ad = G.newLife({ name: 'Ad', age: 30 });
+  ad.coins = 5000; ad.home = { type: 'rent', id: 'apartment' };
+  ad.skills.people = 40; G.run(ad, 'applyJob', 'shop');
+  const aids = G.routine(ad).map(x => x.task.id);
+  for (const id of ['shower', 'breakfast', 'work', 'shopping', 'dinner', 'clean', 'bills', 'brushPM']) assert.ok(aids.includes(id), id);
+  ad.sick = { id: 'cold' };
+  assert.ok(G.routine(ad).some(x => x.task.id === 'doctor'), 'see the doctor when poorly');
+  assert.ok(G.run(ad, 'clinic', 'gp').ok);
+  assert.ok(G.ensureDay(ad).done.doctor, 'visiting the doctor ticks it off');
+  assert.ok(G.run(ad, 'buyItem', 'veg').ok);
+  assert.ok(G.ensureDay(ad).done.shopping, 'going shopping ticks it off');
+});
+
+test('hygiene and tummy go down when busy, and washing and meals fill them up', () => {
+  lucky();
+  const l = G.newLife({ name: 'Hy', age: 10 });
+  l.needs = { hygiene: 22, food: 22 };
+  l.energy = 5;
+  const r = G.run(l, 'activity', 'playout');
+  assert.ok(l.needs.hygiene < 22 && l.needs.food < 22);
+  assert.match(r.msg, /tummy|pongy/, 'a gentle reminder');
+  assert.equal(G.run(l, 'doTask', 'wash', { score: 0, total: 5 }).ok, false, 'finish the game first');
+  assert.ok(G.run(l, 'doTask', 'wash', { score: 5, total: 5 }).ok);
+  assert.equal(l.needs.hygiene, 100);
+  const h = l.stats.health;
+  assert.ok(G.run(l, 'doTask', 'breakfast', { items: BALANCED }).ok);
+  assert.ok(l.needs.food > 50 && l.stats.health >= h);
+  assert.equal(G.run(l, 'doTask', 'breakfast', { items: BALANCED }).ok, false, 'once a day');
+  assert.ok(G.mealScore(BALANCED).balanced);
+  assert.equal(G.mealScore({ treat: '🍰' }).balanced, false);
+  assert.ok(G.needValue(l, 'energy') >= 0 && G.needValue(l, 'energy') <= 100);
+});
+
+test('four days a year, then it is time for a birthday', () => {
+  lucky();
+  const l = G.newLife({ name: 'Four', age: 8 });
+  for (let i = 0; i < 4; i++) { l.energy = 0; const r = liveDay(l); assert.ok(r.ok); assert.equal(l.energy, l.maxEnergy, 'sleep restores energy'); }
+  assert.equal(G.run(l, 'sleep').ok, false);
+  assert.equal(G.run(l, 'doTask', 'brushAM', { score: 1, total: 1 }).ok, false);
+  assert.ok(l.totals.superDays >= 4);
+  const rep = G.ageUp(l, { force: true });
+  assert.ok(rep.notes.some(n => /Super Day/.test(n.t)));
+  assert.equal(G.daysLeft(l), 4, 'a new year has four new days');
+});
+
+test('paying bills early: no double charges, and the home loan goes down', () => {
+  lucky();
+  const l = G.newLife({ name: 'Bill', age: 30 });
+  l.coins = 200000;
+  G.run(l, 'buyHome', 'flat');
+  const owed = l.home.owed;
+  const before = G.yearlyMoney(l).reduce((s, m) => s + m.v, 0);
+  const bills = G.unpaidBills(l);
+  assert.ok(bills.length >= 3);
+  const total = bills.reduce((s, m) => s + m.v, 0);
+  for (const b of bills) assert.ok(G.run(l, 'payBill', b.t).ok, b.t);
+  assert.equal(G.unpaidBills(l).length, 0);
+  assert.ok(l.achievements.includes('bill_boss'));
+  assert.ok(l.home.owed < owed, 'paying the home payment reduces what is owed');
+  const after = G.yearlyMoney(l).reduce((s, m) => s + m.v, 0);
+  assert.equal(after, before - total, 'paid bills are not charged again');
+  const owedNow = l.home.owed;
+  const c = l.coins;
+  G.ageUp(l, { force: true });
+  assert.equal(l.home.owed, owedNow, 'no second home payment at the birthday');
+  assert.ok(l.coins >= c - 50, 'nothing charged twice');
+});
+
+test('taxes: only for grown-ups who earn enough, with a friendly tax return', () => {
+  lucky();
+  const kid = G.newLife({ name: 'Kid', age: 15 });
+  G.run(kid, 'takeSideJob', 'paper');
+  assert.ok(!G.yearlyMoney(kid).some(m => m.tax), 'no tax for children');
+  const low = G.newLife({ name: 'Low', age: 25 });
+  G.run(low, 'applyJob', 'shop');
+  assert.equal(G.incomeTax(low), 0, 'under the tax-free amount');
+  const hi = G.newLife({ name: 'Hi', age: 35 });
+  hi.edu.level = 4; hi.stats.smarts = 95; hi.skills.science = 80;
+  assert.ok(G.run(hi, 'applyJob', 'doctor').ok);
+  assert.ok(G.incomeTax(hi) > 0);
+  assert.ok(G.yearlyMoney(hi).some(m => /Income tax/.test(m.t)));
+  assert.ok(G.routine(hi).some(x => x.task.id === 'taxes'));
+  const quiz = G.taxQuiz(hi);
+  assert.equal(quiz.length, 3);
+  for (const q of quiz) assert.ok(q.options.includes(q.answer));
+  assert.equal(G.run(hi, 'fileTaxes', 1, 3).ok, false);
+  const r = G.run(hi, 'fileTaxes', 3, 3);
+  assert.ok(r.ok && r.coinsDelta > 0, 'a small refund for a perfect return');
+  assert.ok(hi.achievements.includes('tax_star'));
+  assert.ok(G.ensureDay(hi).done.taxes);
+});
+
+test('looking after the family and pets in everyday life is rewarded', () => {
+  lucky();
+  const l = G.newLife({ name: 'Par', age: 32 });
+  l.people.push(G.makePerson('spouse', 32, 'girl', { name: 'Zoe', livesWith: true }));
+  G.run(l, 'haveBaby', 'Kit', 'boy');
+  const kid = G.children(l)[0]; kid.age = 6; G.ensureKid(kid);
+  l.pets.push({ id: 'pp1', kind: 'dog', name: 'Rex', age: 2, love: 50 }); G.ensurePets(l);
+  const ids = G.routine(l).map(x => x.task.id);
+  for (const id of ['kidsReady', 'feedPets', 'stories', 'familyTime']) assert.ok(ids.includes(id), id);
+  const close = kid.close, full = l.pets[0].full;
+  for (const id of ['kidsReady', 'feedPets', 'stories', 'familyTime']) assert.ok(G.run(l, 'doTask', id).ok);
+  assert.ok(kid.close > close && l.pets[0].full > full);
+  const meals = kid.kid.meals;
+  assert.ok(G.run(l, 'doTask', 'dinner', { items: BALANCED }).ok);
+  assert.equal(kid.kid.meals, meals + 1, 'family dinner feeds the children too');
+});
+
+test('babies are looked after by their family', () => {
+  lucky();
+  const b = G.newLife({ name: 'Bub' });
+  const ids = G.routine(b).map(x => x.task.id);
+  assert.ok(ids.includes('milk') && ids.includes('bath') && !ids.includes('brushAM'));
+  const h = b.needs.hygiene;
+  b.energy = 3; G.run(b, 'activity', 'giggle');
+  assert.equal(b.needs.hygiene, h, 'babies do not get pongy from playing');
 });

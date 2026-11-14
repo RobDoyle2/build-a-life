@@ -496,7 +496,7 @@
     BAL.sound('tada'); confetti(true);
     var fam = nl.people.filter(function (x) { return G.PARENTS.indexOf(x.role) >= 0; }).map(function (x) { return x.name; });
     openModal({ html: '<div class="welcome-av">' + BAL.avatar(nl.look, 0, 95, { full: true }) + '</div><p class="lead">Welcome to the world, <b>' + esc(nl.name) + '</b>!</p><p>You were born in ' + G.town(nl).emoji + ' <b>' + esc(G.town(nl).name) + '</b>' + (fam.length ? ' to ' + esc(fam.join(' and ')) : '') + '.</p>' +
-      '<ul class="year-lines"><li><span>🎈</span> Do <b>activities</b> using your ⚡ energy.</li><li><span>✅</span> Finish your <b>daily jobs</b>.</li><li><span>🪞</span> Tap <b>Change Your Look</b> any time — it\'s free!</li><li><span>🎂</span> Press <b>Age Up</b> to have a birthday and grow!</li></ul>',
+      '<ul class="year-lines"><li><span>🎈</span> Do <b>activities</b> using your ⚡ energy.</li><li><span>☀️</span> Look after yourself in <b>My Day</b> — brush, wash, eat, sleep!</li><li><span>🪞</span> Tap <b>Change Your Look</b> any time — it\'s free!</li><li><span>🎂</span> Press <b>Age Up</b> to have a birthday and grow!</li></ul>',
       title: 'It\'s a new life! 👶', buttons: [{ label: 'Let\'s go! 🚀' }] });
   }
 
@@ -510,7 +510,7 @@
     { id: 'money', name: 'Money', emoji: '🪙', color: '#F59F00' },
     { id: 'shop', name: 'Shop', emoji: '🛍️', color: '#9775FA' },
     { id: 'health', name: 'Health', emoji: '🏥', color: '#FF5D73' },
-    { id: 'chores', name: 'Daily Jobs', emoji: '✅', color: '#20C997' },
+    { id: 'chores', name: 'My Day', emoji: '☀️', color: '#20C997' },
     { id: 'explore', name: 'Explore', emoji: '🗺️', color: '#3A86FF' },
     { id: 'story', name: 'My Story', emoji: '📖', color: '#F59F00' }
   ];
@@ -526,7 +526,8 @@
     var tabs = TABS.map(function (tb) {
       var name = tb.name, emoji = tb.emoji, badge = '';
       if (tb.id === 'school') { if (l.age >= 18 && !l.edu.course) { name = 'Work'; emoji = '💼'; } else if (l.age < 3) { name = 'Learning'; emoji = '🧸'; } }
-      if (tb.id === 'chores' && choresLeft) badge = '<span class="badge">' + choresLeft + '</span>';
+      var coreLeft = G.daysLeft(l) > 0 ? G.coreLeft(l) : 0;
+      if (tb.id === 'chores' && (coreLeft || choresLeft)) badge = '<span class="badge">' + (coreLeft || choresLeft) + '</span>';
       if (tb.id === 'health' && l.sick) badge = '<span class="badge">!</span>';
       if (tb.id === 'money' && l.owed > 0) badge = '<span class="badge">!</span>';
       return '<button class="tab' + (S.tab === tb.id ? ' on' : '') + '" data-act="tab"' + a('id', tb.id) + ' style="--tc:' + tb.color + '"><span class="tab-emoji">' + emoji + '</span><span class="tab-name">' + name + '</span>' + badge + '</button>';
@@ -548,7 +549,7 @@
       '</div></div><button class="btn look-btn" data-act="changeLook"><span>🪞</span> Change Your Look <small>· free!</small></button>' +
       '<div class="coins-row"><span class="coins" title="Coins (pretend money)"><span class="coin-ico">🪙</span> ' + fmt(l.coins) + '</span><span class="stars-chip" title="Challenge stars">⭐ ' + fmt(l.totals.stars || 0) + '</span><span class="year">📅 ' + l.year + '</span></div>' +
       '<div class="energy" title="Energy: each activity uses one ⚡. Age up to get more!"><span class="energy-label">Energy</span>' + pips + '</div>' +
-      '<div class="stats">' + stats + '</div>' +
+      '<div class="stats">' + stats + '</div>' + needsBars(l) +
       (goalsLeft ? '<button class="btn ageup locked" data-act="ageUp"><span class="cake">🔒</span> Age Up<small>Finish ' + goalsLeft + ' more challenge' + (goalsLeft === 1 ? '' : 's') + ' first</small></button>'
         : '<button class="btn ageup ready" data-act="ageUp"><span class="cake">🎂</span> Age Up!<small>Birthday ready — go to age ' + (l.age + 1) + '!</small></button>') +
       '</aside>' +
@@ -564,7 +565,7 @@
       case 'pets': return panelPets(l);
       case 'shop': return panelShop(l);
       case 'health': return panelHealth(l);
-      case 'chores': return panelChores(l);
+      case 'chores': return panelDay(l);
       case 'towns': return panelTowns(l);
       case 'story': return panelStory(l);
       case 'money': return panelMoney(l);
@@ -1044,6 +1045,7 @@
     } else if (l.age >= 18 && G.canAskFamily(l)) {
       html += '<div class="tip">💡 Running low? You can ' + btn('🤝 Ask family for help', 'do', a('fn', 'askFamily'), 'small') + ' once a year.</div>';
     }
+    if (l.age >= 18 && G.unpaidBills(l).length && l.home.type !== 'family') html += '<div class="tip">🧾 Pay your bills early to be a <b>Bill Boss</b>! ' + btn('🧾 Pay bills', 'payBills', '', 'small primary') + '</div>';
     html += '<h3 class="sub">📊 Where your money goes <small>(this is what will happen on your next birthday)</small></h3><div class="money-cols">' +
       '<div class="money-col"><h4>💰 Coming in</h4><ul class="money-list">' + (inc.map(row).join('') || '<li class="muted">Nothing yet</li>') + '</ul></div>' +
       '<div class="money-col"><h4>🧾 Going out</h4><ul class="money-list">' + (out.map(row).join('') || '<li class="muted">No bills — your family looks after you! 💛</li>') + '</ul></div></div>';
@@ -1317,6 +1319,141 @@
     if (x.fn) act(x.fn, x.arg);
   }
 
+  /* ====================== My Day ====================== */
+  var TAP_GAMES = {
+    teeth: { title: 'Scrub away all the germs!', target: ['🦠'], other: ['🦷'], done: '✨', n: 5, size: 12 },
+    bubbles: { title: 'Scrub off all the mucky bits!', target: ['🟤'], other: ['🫧', '🧼'], done: '🫧', n: 5, size: 12 },
+    shower: { title: 'Lather up and wash off the mud!', target: ['🟤', '💧'], other: ['🚿', '🧴'], done: '✨', n: 6, size: 12 },
+    tidy: { title: 'Tap all the mess to tidy it away!', target: ['🧦', '👕', '🧸', '📚', '🍌', '🧩'], other: ['🛏️', '🪴', '🖼️', '🪑'], done: '✨', n: 6, size: 12 },
+    clean: { title: 'Tap the mess and cobwebs to clean the house!', target: ['🕸️', '🧦', '🥤', '📦', '🍽️', '👟'], other: ['🛋️', '🪴', '🖼️', '📺', '🪑'], done: '✨', n: 7, size: 15 }
+  };
+  function needsBars(l) {
+    return '<div class="needs-bars">' + BAL.NEEDS.map(function (n) {
+      var v = G.needValue(l, n.id);
+      return '<div class="need-bar' + (v < 25 ? ' low' : '') + '"><span>' + n.emoji + ' ' + n.name + '</span>' + bar(v, n.color, n.name) + '</div>';
+    }).join('') + '</div>';
+  }
+  function panelDay(l) {
+    var d = G.ensureDay(l), left = G.daysLeft(l);
+    var day = BAL.DAYS[Math.min(d.n, BAL.DAYS.length - 1)];
+    var tasks = G.routine(l);
+    var core = tasks.filter(function (x) { return x.task.core; }), coreDone = core.filter(function (x) { return x.done; }).length;
+    var out = head('☀️', 'My Day', left ? day.emoji + ' ' + day.name + ' · day ' + (d.n + 1) + ' of ' + BAL.DAYS.length + ' this year' : 'All four days done this year!') + needsBars(l);
+    if (!left) {
+      out += '<div class="big-msg"><span>🎂</span><p>You\'ve lived all four days this year' + (d.super ? ' — with <b>' + d.super + ' Super Day' + (d.super > 1 ? 's' : '') + '</b>! ⭐' : '.') + ' Finish your challenges and press <b>Age Up</b> for your birthday!</p></div>';
+    } else {
+      out += '<div class="day-progress"><b>Important tasks: ' + coreDone + ' / ' + core.length + '</b>' + bar(coreDone / Math.max(1, core.length) * 100, 'linear-gradient(90deg,#FFD43B,#FF9F1C)', 'Important tasks') +
+        '<span class="small muted">Do every ⭐ task, then go to sleep for a <b>Super Day</b>!</span></div>';
+      out += '<div class="phases">' + BAL.PHASES.map(function (ph) {
+        var list = tasks.filter(function (x) { return x.task.phase === ph.id; });
+        return '<div class="phase phase-' + ph.id + '"><h4>' + ph.emoji + ' ' + ph.name + '</h4>' + (list.length ? list.map(function (x) {
+          var t = x.task;
+          return '<button class="task' + (x.done ? ' done' : '') + (t.core ? ' core' : '') + '" data-act="dayTask"' + a('id', t.id) + (x.done ? ' disabled' : '') + '>' +
+            '<span class="task-emoji">' + (x.done ? '✅' : t.emoji) + '</span><span class="task-name">' + esc(t.name) + '</span>' + (t.core && !x.done ? '<span class="task-star" title="Important">⭐</span>' : '') + '</button>';
+        }).join('') : '<p class="small muted">Free time!</p>') +
+          (ph.id === 'night' ? '<button class="btn sleep-btn" data-act="sleep">😴 Go to sleep</button>' : '') + '</div>';
+      }).join('') + '</div>';
+    }
+    out += '<h3 class="sub">🧹 Household jobs this year</h3>' + choresList(l);
+    return out;
+  }
+  function choresList(l) {
+    var done = l.chores.filter(function (c) { return c.done; }).length;
+    return '<div class="progress-label">' + done + ' of ' + l.chores.length + ' done</div>' + bar(l.chores.length ? done / l.chores.length * 100 : 0, 'linear-gradient(90deg,#69DB7C,#20C997)', 'Daily jobs done') +
+      '<div class="chore-list">' + l.chores.map(function (c, i) {
+        return '<button class="chore' + (c.done ? ' done' : '') + '" data-act="do" data-fn="chore"' + a('a1', i) + (c.done ? ' disabled' : '') + '><span class="chore-box">' + (c.done ? '✔' : '') + '</span><span class="chore-emoji">' + c.e + '</span><span>' + esc(c.t) + '</span></button>';
+      }).join('') + '</div>';
+  }
+
+  function startTap(l, id) {
+    var t = G.task(id), g = TAP_GAMES[t.game];
+    var cells = [];
+    for (var i = 0; i < g.n; i++) cells.push({ e: G.pick(g.target), target: true });
+    while (cells.length < g.size) cells.push({ e: G.pick(g.other), target: false });
+    for (var j = cells.length - 1; j > 0; j--) { var k = Math.floor(Math.random() * (j + 1)); var tmp = cells[j]; cells[j] = cells[k]; cells[k] = tmp; }
+    S.game = { daytask: id, type: 'tap', c: { emoji: t.emoji, name: t.name }, title: g.title, cells: cells, done: g.done, score: 0, total: g.n };
+    BAL.sound('click'); renderMini();
+  }
+  function startPlate(l, id) {
+    var t = G.task(id);
+    S.game = { daytask: id, type: 'plate', c: { emoji: t.emoji, name: t.name }, items: {} };
+    BAL.sound('click'); renderMini();
+  }
+  function renderDayGame(m) {
+    if (m.type === 'tap') {
+      return '<p class="mg-q small-q">' + esc(m.title) + '</p><div class="mg-grid' + (m.cells.length > 12 ? ' five' : '') + '">' + m.cells.map(function (c, k) {
+        return '<button class="mg-cell' + (c.cleaned ? ' found' : '') + (m.wrong === k ? ' nope' : '') + '" data-act="gTap"' + a('i', k) + (c.cleaned ? ' disabled' : '') + '>' + (c.cleaned ? m.done : c.e) + '</button>';
+      }).join('') + '</div><p class="mg-count">' + m.score + ' of ' + m.total + ' done</p><div class="modal-btns">' + btn('Close', 'gClose', '', 'ghost') + '</div>';
+    }
+    // plate builder
+    var sc = G.mealScore(m.items);
+    var plate = Object.keys(m.items).map(function (g) { return '<span>' + m.items[g] + '</span>'; }).join('');
+    return '<div class="plate-wrap"><div class="plate">' + (plate || '<small>Pick some food!</small>') + '</div>' +
+      '<div class="plate-meter">' + ['veg', 'protein', 'carbs', 'drink'].map(function (g) { var fg = byId(BAL.FOOD_GROUPS, g); return '<span class="' + (m.items[g] ? 'got' : '') + '">' + fg.emoji + '</span>'; }).join('') + (sc.balanced ? '<b class="balanced">✅ Balanced!</b>' : '') + '</div></div>' +
+      BAL.FOOD_GROUPS.map(function (fg) {
+        return '<div class="food-row"><b>' + fg.emoji + ' ' + fg.name + '</b><div class="pick-row">' + fg.items.map(function (it) {
+          return '<button class="pick chip food' + (m.items[fg.id] === it[0] ? ' on' : '') + '" data-act="gFood"' + a('g', fg.id) + a('v', it[0]) + ' title="' + it[1] + '">' + it[0] + '</button>';
+        }).join('') + '</div></div>';
+      }).join('') + '<div class="modal-btns">' + btn('😋 Eat!', 'gEat', '', 'primary big' + (plate ? '' : ' ghost')) + btn('Close', 'gClose', '', 'ghost') + '</div>';
+  }
+  function dayResult(res) {
+    var l = life();
+    save(); render();
+    feedback(res);
+    if (res.taskDone && res.taskDone.length && res.taskDone.indexOf(res.task) < 0) toast('✅ Ticked off in My Day: ' + res.taskDone.map(function (id) { return G.task(id).name; }).join(', '), '☀️', 'good');
+    if (l && G.coreLeft(l) === 0 && G.daysLeft(l) > 0 && res.ok && res.task && G.task(res.task).core) toast('All important tasks done! Go to sleep for a ⭐ Super Day!', '🌙', 'good');
+  }
+  function billsModal(l) {
+    var bills = G.unpaidBills(l);
+    if (!bills.length) { toast('All bills are paid! ✅', '🧾', 'good'); return; }
+    openModal({ emoji: '🧾', title: 'Pay your bills', cls: 'bills',
+      html: '<p>Pay each bill early and you\'re a <b>Bill Boss</b>! (Anything you don\'t pay is taken automatically on your birthday.)</p><div class="bill-list">' + bills.map(function (m, i) {
+        return '<div class="bill"><span>' + m.e + ' ' + esc(m.t) + '</span><b>🪙 ' + fmt(-m.v) + '</b><button class="btn small primary" data-mx="' + i + '">Pay</button></div>';
+      }).join('') + '</div><p class="small muted">You have 🪙 ' + fmt(l.coins) + '. 🏛️ Taxes help pay for schools, hospitals, roads and parks.</p>',
+      buttons: [{ label: 'Done', cls: 'ghost' }],
+      x: bills.map(function (m) { return function () { var r = act('payBill', m.t); if (r && r.ok && G.unpaidBills(life()).length) setTimeout(function () { billsModal(life()); }, 60); }; }) });
+  }
+  function startTaxes(l) {
+    S.game = { tax: true, type: 'quiz', kind: 'tax', c: { emoji: '📊', name: 'Your Tax Return' }, quiz: G.taxQuiz(l), qi: 0, score: 0, results: [], picked: null };
+    BAL.sound('click'); renderMini();
+  }
+  function momentModal(l, id) {
+    var t = G.task(id), mo = G.moment(l, t.moment);
+    openModal({ emoji: t.emoji, title: esc(t.name), html: '<p class="lead">' + esc(mo.q) + '</p>',
+      buttons: mo.r.map(function (r, i) { return { label: esc(r[0]), cls: 'primary', fn: function () { dayResult(G.run(life(), 'doTask', id, { choice: i })); } }; }).concat([{ label: 'Later', cls: 'ghost' }]) });
+  }
+  function dayTask(l, id) {
+    var t = G.task(id);
+    if (!t) return;
+    if (t.kind === 'game') return startTap(l, id);
+    if (t.kind === 'meal') return startPlate(l, id);
+    if (t.kind === 'moment') return momentModal(l, id);
+    if (t.kind === 'bills') return billsModal(l);
+    if (t.kind === 'taxes') return startTaxes(l);
+    if (t.kind === 'tab') { S.tab = t.tab; if (t.tab === 'shop') S.shopCat = 'groceries'; BAL.sound('click'); render(); toast(t.name + ': do it here and it will be ticked off in My Day!', t.emoji, 'good'); return; }
+    dayResult(G.run(l, 'doTask', id));
+  }
+  function goToSleep(l) {
+    var res = G.run(l, 'sleep');
+    if (!res.ok) { feedback(res); return; }
+    save();
+    var night = document.createElement('div');
+    night.className = 'night-fx';
+    night.innerHTML = '<span class="moon">🌙</span><span class="zz">Z z z…</span><span class="st s1">⭐</span><span class="st s2">✨</span><span class="st s3">⭐</span>';
+    if (!reduced()) $fx.appendChild(night);
+    BAL.sound('click');
+    setTimeout(function () {
+      night.remove(); render();
+      var sm = res.summary, nextDay = BAL.DAYS[Math.min(G.ensureDay(life()).n, BAL.DAYS.length - 1)];
+      openModal({ emoji: sm.superDay ? '🌟' : '☀️', title: sm.superDay ? 'Super Day!' : 'Good morning!', cls: sm.superDay ? 'sticker-modal' : '',
+        html: '<p class="lead">' + sm.day.emoji + ' ' + sm.day.name + ': you did <b>' + sm.coreDone + ' of ' + sm.core + '</b> important tasks' + (sm.extra ? ' and ' + sm.extra + ' extra' : '') + '.</p>' +
+          (sm.superDay ? '<p>⭐ You looked after yourself brilliantly! +1 star, and a happiness & health boost.</p>' : '<p>Tomorrow, try to do every ⭐ task for a Super Day!</p>') +
+          '<p class="small muted">' + (sm.last ? 'That was the last day this year — time for your birthday soon! 🎂' : 'Next up: ' + nextDay.emoji + ' ' + nextDay.name + '. Your energy is full again ⚡') + '</p>',
+        buttons: [{ label: sm.superDay ? 'Yay! ⭐' : 'Rise and shine! ☀️' }], onOpen: function () { if (sm.superDay) { BAL.sound('tada'); confetti(true); } else BAL.sound('good'); } });
+      goalFeedback(res.goalsDone); showAchievements(life());
+    }, reduced() ? 0 : 1500);
+  }
+
   /* ====================== Challenges ====================== */
   function ordinal(n) { var s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
   function isFixed(l, c) { return c.fixed && c.fixed.indexOf(l.age) >= 0; }
@@ -1398,10 +1535,12 @@
         (m.type === 'quiz' ? '<p class="lead">You got <b>' + m.score + ' out of ' + m.total + '</b> right.</p>' : '') +
         '<p>' + esc(m.result.msg) + '</p></div>' +
         '<div class="modal-btns">' + (passed ? btn('Hooray! 🎉', 'gClose', '', 'primary big') : (m.hw ? '' : btn('🔄 Try again', 'gRetry', '', 'primary big')) + btn(m.hw ? 'OK' : 'Later', 'gClose', '', 'ghost big')) + '</div>';
+    } else if (m.type === 'tap' || m.type === 'plate') {
+      body = renderDayGame(m);
     } else if (m.type === 'quiz') {
       var q = m.quiz[m.qi];
       var dots = m.quiz.map(function (x, k) { var r = m.results[k]; return '<span class="mg-dot' + (r === true ? ' right' : r === false ? ' wrong' : k === m.qi ? ' now' : '') + '"></span>'; }).join('');
-      body = '<div class="mg-dots">' + dots + '</div><p class="mg-count">Question ' + (m.qi + 1) + ' of ' + m.quiz.length + (m.kind === 'exam' ? ' · get 3 right to pass' : ' · get ' + G.quizPass(m.kind, m.quiz.length) + ' right to win') + '</p>' +
+      body = '<div class="mg-dots">' + dots + '</div><p class="mg-count">Question ' + (m.qi + 1) + ' of ' + m.quiz.length + (m.kind === 'exam' ? ' · get 3 right to pass' : m.tax ? ' · get 2 right to file it' : ' · get ' + G.quizPass(m.kind, m.quiz.length) + ' right to win') + '</p>' +
         '<div class="mg-q">' + esc(q.q) + '</div>' + (q.art ? '<div class="mg-art">' + q.art + '</div>' : '') +
         '<div class="mg-opts">' + q.options.map(function (o) {
           var cls = '';
@@ -1426,7 +1565,7 @@
   function finishMini() {
     var m = S.game, l = life();
     m.total = m.type === 'quiz' ? m.quiz.length : m.find.targets.length;
-    var res = m.hw ? G.run(l, 'helpHomework', m.hw, m.score, m.total) : G.run(l, 'completeGame', m.i, m.score, m.total);
+    var res = m.hw ? G.run(l, 'helpHomework', m.hw, m.score, m.total) : m.tax ? G.run(l, 'fileTaxes', m.score, m.total) : m.daytask ? G.run(l, 'doTask', m.daytask, { score: m.score, total: m.total }) : G.run(l, 'completeGame', m.i, m.score, m.total);
     m.result = res;
     save();
     renderMini();
@@ -1436,7 +1575,15 @@
   function miniClick(actName, el) {
     var m = S.game; if (!m) return;
     if (actName === 'gClose') { closeMini(); render(); return; }
-    if (actName === 'gRetry') { var i = m.i, hw = m.hw; closeMini(); if (hw) playHomework(life(), hw); else playGame(i); return; }
+    if (actName === 'gRetry') { var i = m.i, hw = m.hw, tx = m.tax; closeMini(); if (hw) playHomework(life(), hw); else if (tx) startTaxes(life()); else playGame(i); return; }
+    if (actName === 'gTap') {
+      var ci = +el.getAttribute('data-i'), cell = m.cells[ci];
+      if (cell.target && !cell.cleaned) { cell.cleaned = true; m.score += 1; m.wrong = null; BAL.sound('good'); renderMini(); if (m.score >= m.total) setTimeout(function () { var r = G.run(life(), 'doTask', m.daytask, { score: m.score, total: m.total }); closeMini(); dayResult(r); if (r.ok) confetti(false); }, 350); }
+      else if (!cell.target) { m.wrong = ci; BAL.sound('bad'); renderMini(); setTimeout(function () { if (S.game === m) { m.wrong = null; renderMini(); } }, 400); }
+      return;
+    }
+    if (actName === 'gFood') { var g = el.getAttribute('data-g'), v = el.getAttribute('data-v'); if (m.items[g] === v) delete m.items[g]; else m.items[g] = v; BAL.sound('click'); renderMini(); return; }
+    if (actName === 'gEat') { if (!Object.keys(m.items).length) { BAL.sound('bad'); return; } var er = G.run(life(), 'doTask', m.daytask, { items: m.items }); closeMini(); dayResult(er); if (er.ok && G.mealScore(m.items).balanced) confetti(false); return; }
     if (actName === 'gSpeak') { var q = m.type === 'quiz' && !m.result ? m.quiz[m.qi] : null; speak(q ? q.q + '. ' + q.options.join(', or ') : (m.find && !m.result ? m.find.title : $game.innerText)); return; }
     if (actName === 'gAnswer' && m.picked === null) {
       var q2 = m.quiz[m.qi], v = el.getAttribute('data-v');
@@ -1664,7 +1811,10 @@
         toast(gc2.desc + (gc2.hint ? ' ' + gc2.hint : ''), gc2.emoji, 'good');
         break;
       }
-      case 'gClose': case 'gRetry': case 'gSpeak': case 'gAnswer': case 'gCell': miniClick(actName, el); break;
+      case 'gClose': case 'gRetry': case 'gSpeak': case 'gAnswer': case 'gCell': case 'gTap': case 'gFood': case 'gEat': miniClick(actName, el); break;
+      case 'dayTask': dayTask(l, d('id')); break;
+      case 'sleep': goToSleep(l); break;
+      case 'payBills': billsModal(l); break;
       case 'do': {
         var a1 = d('a1'), fn = d('fn');
         if (fn === 'chore') a1 = +a1;
@@ -1732,7 +1882,7 @@
       '<li><span>🗺️</span> Grow through 8 life stages: Baby, Toddler, Child, Teenager, Young Adult, Adult, Older Adult and Grandparent.</li>' +
       '<li><span>🎂</span> Press <b>Age Up</b> to have a birthday. Coins come in and bills go out.</li>' +
       '<li><span>😊</span> Keep your <b>Happiness, Health, Smarts and Fitness</b> high!</li>' +
-      '<li><span>✅</span> Finish your <b>Daily Jobs</b> each year for a bonus.</li>' +
+      '<li><span>☀️</span> In <b>My Day</b>, look after yourself: brush your teeth, wash, eat balanced meals, go to school or work, tidy up, pay bills — then sleep. Do every ⭐ task for a <b>Super Day</b>! Each year has four days.</li>' +
       '<li><span>🏫</span> Go to school, then college or university, then get a job you love.</li>' +
       '<li><span>🪙</span> Earn coins from jobs (you can have up to 3!), side jobs, odd jobs or your own business. Spend them on food, homes, cars, furniture, pets, toys and parties. Coins are pretend — no real money!</li>' +
       '<li><span>🛟</span> Run out of coins? Don\'t panic — the 🪙 Money tab has a rescue plan, and there are always odd jobs to do.</li>' +
