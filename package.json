@@ -1,0 +1,11 @@
+{
+  "name": "build-a-life",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Build a Life - a colourful life simulation game for children aged 5-15. Plain HTML, CSS and JavaScript.",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "node --test tests/*.test.js"
+  }
+}
