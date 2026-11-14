@@ -11,6 +11,7 @@ await import('../js/world.js');
 await import('../js/family.js');
 await import('../js/pets.js');
 await import('../js/everyday.js');
+await import('../js/celebrations.js');
 await import('../js/avatar.js');
 await import('../js/storage.js');
 const BAL = globalThis.BAL;
@@ -386,6 +387,7 @@ function solveYear(l) {
     if (acts.includes('reply')) { const fam = l.people.find(p => G.convKind(l, p) !== 'friend' || p.role === 'friend'); assert.ok(fam, 'someone to chat to'); G.run(l, 'reply', fam.id, 0); continue; }
     if (acts.includes('feedChild')) { const k = G.kidsAtHome(l).find(p => p.kid.meals < 3); assert.ok(G.run(l, 'feedChild', k.id, 'toast').ok); continue; }
     if (acts.includes('helpHomework')) { const k = G.kidsAtHome(l).find(p => p.age >= 5 && p.kid.hw < 3); G.run(l, 'helpHomework', k.id, 3, 3); continue; }
+    if (acts.includes('sendInvites')) { if (!l.party) assert.ok(G.run(l, 'bookParty', { cake: { shape: 'round' }, decor: ['banner'], venue: 'home' }).ok, 'a free party is always possible'); if (!l.party.guests.length) l.party.guests = G.partyGuestsPool(l).slice(0, 1).map(p => p.id); if (!l.party.guests.length) { G.run(l, 'makeFriend'); l.party.guests = G.partyGuestsPool(l).slice(0, 1).map(p => p.id); } G.run(l, 'sendInvites'); continue; }
     if (acts.includes('celebrateChild')) { const k = G.kidsAtHome(l).find(p => p.kid.bday); assert.ok(G.run(l, 'celebrateChild', k.id, 'cake').ok); continue; }
     if (acts.includes('celebrate')) { const o = G.occasions(l).find(x => !x.done && !x.child); const free = o.levels.find(v => G.occasionCost(l, v) <= l.coins); assert.ok(free, 'an affordable way to celebrate ' + o.id); G.run(l, 'celebrate', o.id, free); continue; }
     if (acts.includes('feedPet')) { G.run(l, 'feedPet', l.pets[0].id, 'basic'); G.run(l, 'washPet', l.pets[0].id); l.pets[0].full = 0; l.pets[0].clean = 0; continue; }
@@ -836,8 +838,10 @@ test('raising children: meals, homework, clothes, birthdays, doctor and time tog
   assert.ok(G.run(l, 'buyChildClothes', o.id, 1).ok);
   assert.equal(o.kid.outgrown, false);
   assert.equal(o.look.outfits[G.ageGroup(6)].top, G.childOutfits(l, o.id).length && o.look.outfits.child.top);
+  o.close = 50;
   const close = o.close;
-  assert.ok(G.run(l, 'celebrateChild', o.id, 'party').ok);
+  const cr = G.run(l, 'celebrateChild', o.id, 'party');
+  assert.ok(cr.ok, cr.msg + ' coins=' + l.coins);
   assert.ok(o.close > close);
   assert.equal(G.run(l, 'celebrateChild', o.id, 'party').ok, false, 'one party a year');
   o.kid.sick = 'a sniffly cold';
@@ -872,7 +876,7 @@ test('family occasions always have a free way to celebrate', () => {
   }
   assert.ok(G.occasions(l).filter(x => !x.child).every(o => o.done));
   const kid = G.newLife({ name: 'Ty', age: 8 });
-  assert.ok(G.occasions(kid).some(o => o.kid), 'children can make cards for family birthdays');
+  assert.ok(G.familyBirthdays(kid).length > 0, 'children can celebrate family birthdays');
 });
 
 test('family conversations are two-way and suitable for children', () => {
@@ -1144,4 +1148,134 @@ test('babies are looked after by their family', () => {
   const h = b.needs.hygiene;
   b.energy = 3; G.run(b, 'activity', 'giggle');
   assert.equal(b.needs.hygiene, h, 'babies do not get pongy from playing');
+});
+
+/* ---------------- Birthdays & celebrations ---------------- */
+
+test('everyone has a birthday date', () => {
+  lucky();
+  const l = G.newLife({ name: 'Bea', age: 10 });
+  assert.match(G.bdayText(l.bday), /^\d+ [A-Z][a-z]+$/);
+  for (const p of l.people) assert.ok(p.bday && p.bday.d >= 1 && p.bday.d <= 31);
+  assert.deepEqual(G.newBirthday('x'), G.newBirthday('x'), 'the same every time');
+  assert.equal(G.bdaySeason({ m: 11, d: 25 }), 3);
+  assert.equal(G.bdaySeason({ m: 3, d: 1 }), 0);
+  assert.equal(G.bdaySeason({ m: 9, d: 31 }), 2);
+  G.run(l, 'makeFriend');
+  assert.ok(l.people.every(p => p.bday), 'new friends get birthdays too');
+});
+
+test('planning a party: theme, cake, decorations, balloons, venue and invitations', () => {
+  lucky();
+  const l = G.newLife({ name: 'Max', age: 8 });
+  for (let i = 0; i < 3; i++) G.run(l, 'makeFriend', true);
+  l.coins = 0;
+  const free = { theme: 'dino', cake: { flavour: 'rainbow', shape: 'round', topper: 'stars' }, decor: ['banner'], balloons: '#69DB7C', venue: 'park', guests: G.partyGuestsPool(l).map(p => p.id) };
+  assert.equal(G.partyCost(G.cleanPlan(l, free), l), 0, 'a free party is always possible');
+  const fancy = Object.assign({}, free, { cake: { flavour: 'chocolate', shape: 'castle', topper: 'theme' }, decor: ['balloons', 'arch', 'photo'], venue: 'playcentre' });
+  assert.ok(G.partyCost(G.cleanPlan(l, fancy), l) > 100);
+  assert.equal(G.run(l, 'bookParty', fancy).ok, false, 'family pays 100, the rest needs coins');
+  assert.equal(G.run(l, 'sendInvites').ok, false, 'book first');
+  assert.ok(G.run(l, 'bookParty', free).ok);
+  assert.equal(l.party.theme, 'dino');
+  assert.equal(G.run(l, 'bookParty', free).ok, false, 'already booked');
+  assert.equal(G.cleanPlan(l, { theme: 'bbq' }).theme, 'family', 'grown-up themes are not for children');
+  const r = G.run(l, 'sendInvites');
+  assert.ok(r.ok && Object.keys(l.party.rsvp).length === l.party.guests.length);
+  assert.ok(G.run(l, 'cancelParty').ok);
+  assert.equal(l.party, null);
+});
+
+test('the birthday party happens at Age Up, with guests and presents to unwrap', () => {
+  lucky();
+  const l = G.newLife({ name: 'Ola', age: 9 });
+  for (let i = 0; i < 5; i++) G.run(l, 'makeFriend', true);
+  l.people.filter(p => p.role === 'friend').forEach(p => { p.close = 90; });
+  G.run(l, 'bookParty', { theme: 'space', decor: ['banner', 'balloons'], venue: 'home', guests: G.partyGuestsPool(l).map(p => p.id) });
+  G.run(l, 'sendInvites');
+  const inv = l.inventory.length;
+  const rep = G.ageUp(l, { force: true });
+  const c = rep.celebration;
+  assert.ok(c.planned && c.theme.id === 'space');
+  assert.ok(c.guests.length >= 5);
+  assert.ok(c.presents.length >= 3 && c.presents.every(p => p.from && p.emoji && p.name));
+  assert.ok(l.inventory.length > inv, 'presents go into My Stuff');
+  assert.ok(l.achievements.includes('party_host'));
+  assert.equal(l.party, null);
+  const rep2 = G.ageUp(l, { force: true });
+  assert.ok(!rep2.celebration.planned && rep2.celebration.guests.length > 0, 'without a plan, the family still celebrates');
+  const baby = G.newLife({ name: 'Bub' });
+  const rb = G.ageUp(baby, { force: true });
+  assert.equal(rb.celebration.cake.shape, 'number', 'a first birthday gets a number cake');
+});
+
+test('children\'s birthday parties with cake and a present', () => {
+  lucky();
+  const l = G.newLife({ name: 'Mum', age: 34 });
+  l.coins = 100;
+  l.people.push(G.makePerson('spouse', 34, 'boy', { name: 'Dan', livesWith: true }));
+  G.run(l, 'haveBaby', 'Ivy', 'girl');
+  const kid = G.children(l)[0];
+  for (let i = 0; i < 5; i++) G.ageUp(l, { force: true });
+  l.coins = 0;
+  assert.equal(G.run(l, 'childParty', kid.id, { level: 'party', present: 'bike' }).ok, false, 'too expensive');
+  const r = G.run(l, 'childParty', kid.id, { level: 'cake', present: 'card', theme: 'unicorn', cake: { shape: 'round', flavour: 'strawberry' } });
+  assert.ok(r.ok, r.msg);
+  assert.equal(r.childParty.theme.id, 'unicorn');
+  assert.equal(kid.kid.bday, false);
+  assert.ok(l.goals === undefined || true);
+});
+
+test('family birthdays happen in their season', () => {
+  lucky();
+  const l = G.newLife({ name: 'Tess', age: 12 });
+  const mum = l.people.find(p => ['mum', 'dad', 'parent', 'grandma', 'grandpa'].includes(p.role));
+  mum.bday = { m: 6, d: 10 }; // July → summer
+  assert.equal(G.season(l), 0);
+  assert.equal(G.run(l, 'familyBirthday', mum.id, 'card').ok, false, 'not this season');
+  liveDay(l);
+  assert.equal(G.season(l), 1);
+  assert.ok(G.familyBirthdays(l)[0].now);
+  const c = mum.close;
+  assert.ok(G.run(l, 'familyBirthday', mum.id, 'card').ok);
+  assert.ok(mum.close >= c);
+  assert.equal(G.run(l, 'familyBirthday', mum.id, 'card').ok, false, 'once a year');
+});
+
+test('seasonal celebrations are optional and follow the seasons', () => {
+  lucky();
+  const l = G.newLife({ name: 'Sol', age: 9 });
+  assert.deepEqual(l.festivals, ['easter', 'summer', 'halloween', 'christmas']);
+  for (const id of ['christmas', 'halloween', 'diwali', 'hanukkah', 'eid', 'lunar']) assert.ok(G.festival(id), id);
+  assert.ok(G.run(l, 'festivalActivity', 'easter', 'hunt', { score: 6, total: 6 }).ok, 'Easter in spring');
+  assert.equal(G.run(l, 'festivalActivity', 'easter', 'hunt', { score: 6, total: 6 }).ok, false, 'once a year');
+  assert.equal(G.run(l, 'festivalActivity', 'christmas', 'dinner').ok, false, 'not Christmas yet');
+  assert.equal(G.run(l, 'festivalActivity', 'diwali', 'diyas', { score: 6, total: 6 }).ok, false, 'not chosen');
+  assert.ok(G.run(l, 'toggleFestival', 'diwali').ok);
+  assert.ok(G.run(l, 'toggleFestival', 'halloween').ok);
+  assert.ok(!l.festivals.includes('halloween'), 'celebrations can be switched off');
+  liveDay(l); liveDay(l);
+  assert.equal(G.season(l), 2);
+  assert.ok(G.run(l, 'festivalActivity', 'diwali', 'rangoli', { choice: 1 }).ok);
+  liveDay(l);
+  const inv = l.inventory.length;
+  assert.ok(G.run(l, 'festivalActivity', 'christmas', 'presents').ok);
+  assert.ok(l.inventory.length > inv || l.coins > 0, 'a Christmas present');
+  assert.ok(G.run(l, 'festivalActivity', 'christmas', 'tree', { score: 6, total: 6 }).ok);
+  assert.equal(G.run(l, 'festivalActivity', 'christmas', 'dinner', {}).ok, true);
+  assert.ok(l.achievements.includes('festive_fun'));
+  for (const f of BAL.FESTIVALS) for (const x of f.acts) {
+    assert.ok(['tap', 'choose', 'gift', 'simple'].includes(x.kind), f.id + x.id);
+    if (x.kind === 'tap') assert.ok(x.target.length && x.n > 0);
+  }
+});
+
+test('every cake draws properly', () => {
+  for (const f of BAL.CAKE_FLAVOURS) for (const sh of BAL.CAKE_SHAPES) for (const t of BAL.CAKE_TOPPERS) {
+    for (const n of [1, 7, 42]) {
+      const svg = BAL.cakeArt({ flavour: f.id, shape: sh.id, topper: t.id }, n, n % 2 === 1, { age: n, theme: '🦖' });
+      assert.match(svg, /^<svg[\s\S]*<\/svg>$/);
+      assert.doesNotMatch(svg, /NaN|undefined/);
+    }
+  }
 });

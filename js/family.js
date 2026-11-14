@@ -252,11 +252,6 @@
       list.push({ id: 'dayout', emoji: '🎡', name: 'Family day out', desc: 'A day of fun together — the zoo, the seaside or a theme park!', who: fam.map(function (p) { return p.id; }), levels: ['picnic', 'zoo', 'themepark'] });
       list.push({ id: 'winter', emoji: '❄️', name: 'Winter celebration', desc: 'Decorations, a big family dinner and little presents for everyone.', who: fam.map(function (p) { return p.id; }), levels: ['home', 'feast', 'presents'] });
     }
-    if (l.age < 18) {
-      l.people.filter(function (p) { return ['mum', 'dad', 'parent', 'grandma', 'grandpa', 'sibling'].indexOf(p.role) >= 0; }).slice(0, 2).forEach(function (p) {
-        list.push({ id: 'card:' + p.id, emoji: '💌', name: G.relLabel(p) + ' ' + p.name + '\'s birthday', desc: 'Make something special for ' + p.name + '!', who: [p.id], levels: ['card', 'breakfast', 'present'], kid: true });
-      });
-    }
     var gk = l.people.filter(function (p) { return p.role === 'grandchild'; });
     if (gk.length) list.push({ id: 'grandvisit', emoji: '👵', name: 'Grandchildren\'s visit', desc: 'The grandchildren are coming to stay!', who: gk.map(function (p) { return p.id; }), levels: ['games', 'baking', 'trip'] });
     return list.map(function (o) { o.done = done(l, o.id); return o; });
@@ -456,7 +451,7 @@
     BAL.CHALLENGES.push(
       { id: 'fam_feed_' + st, stage: st, emoji: '🥣', name: 'Family Dinners', desc: 'Cook 2 meals for your children.', track: { act: 'feedChild', n: 2 }, tab: 'people', stars: 1, when: kidsHome },
       { id: 'fam_hw_' + st, stage: st, emoji: '📝', name: 'Homework Helper', desc: 'Help your children with their homework.', track: { act: 'helpHomework', n: 1 }, tab: 'people', stars: 2, when: schoolKids },
-      { id: 'fam_bday_' + st, stage: st, emoji: '🎂', name: 'Birthday Fun', desc: 'Celebrate your child\'s birthday.', track: { act: 'celebrateChild', n: 1 }, tab: 'people', stars: 2, when: bdays },
+      { id: 'fam_bday_' + st, stage: st, emoji: '🎂', name: 'Birthday Fun', desc: 'Celebrate your child\'s birthday.', track: { act: ['celebrateChild', 'childParty'], n: 1 }, tab: 'people', stars: 2, when: bdays },
       { id: 'fam_occ_' + st, stage: st, emoji: '🎡', name: 'Family Occasion', desc: 'Celebrate a family occasion together.', track: { act: 'celebrate', n: 1 }, tab: 'people', stars: 1, when: function (l) { return l.people.some(function (p) { return FAMILY.indexOf(p.role) >= 0; }); } }
     );
   });

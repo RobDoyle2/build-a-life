@@ -41,6 +41,7 @@
           if (BAL.Game && BAL.Game.ensureFamily) BAL.Game.ensureFamily(l);
           if (BAL.Game && BAL.Game.ensurePets) BAL.Game.ensurePets(l);
           if (BAL.Game && BAL.Game.ensureDay) BAL.Game.ensureDay(l);
+          if (BAL.Game && BAL.Game.ensureBirthdays) BAL.Game.ensureBirthdays(l);
           if (BAL.Game && BAL.Game.ensureGoals) BAL.Game.ensureGoals(l);
         });
       });

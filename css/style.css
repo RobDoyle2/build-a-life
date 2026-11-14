@@ -910,3 +910,86 @@ details.money li { display: flex; justify-content: space-between; gap: 10px; fon
 @keyframes nightIn { 0% { opacity: 0; } 25%, 75% { opacity: 1; } 100% { opacity: 0; } }
 @media (max-width: 1100px) { .phases { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .phases { grid-template-columns: 1fr; } .needs-bars { gap: 6px; } .need-bar { font-size: .7rem; } }
+
+/* ---------- Celebrations ---------- */
+.cake-svg { width: 100%; height: 100%; overflow: visible; }
+.bday-cake { width: 170px; height: 170px; margin: 4px auto; position: relative; }
+.bday-cake .flame { transition: opacity .3s; }
+.bday-cake.blown .flame { opacity: 0; }
+.bday-cake.blown::after { content: '💨'; position: absolute; left: 50%; top: 0; font-size: 40px; transform: translateX(-50%); animation: floatUp 1.4s ease-out forwards; }
+.wish { font-family: var(--font-head); font-size: 1.2rem; color: #C2255C; animation: pop .4s; }
+.grow-up { display: flex; align-items: flex-end; justify-content: center; gap: 10px; }
+.gu-old { width: 64px; height: 92px; opacity: .55; filter: grayscale(.3); }
+.gu-new { width: 90px; height: 130px; position: relative; animation: growIn 1.2s cubic-bezier(.2,1.6,.4,1); }
+.gu-old svg, .gu-new svg { width: 100%; height: 100%; overflow: visible; }
+.gu-arrow { font-size: 1.6rem; color: #F06595; padding-bottom: 40px; animation: pulse 1s infinite; }
+@keyframes growIn { from { transform: scale(.6) translateY(20px); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } }
+.sparkle { position: absolute; font-style: normal; font-size: 20px; animation: twinkle 1.4s infinite; }
+.sparkle.s1 { top: 0; left: -10px; } .sparkle.s2 { top: 20%; right: -14px; animation-delay: .4s; } .sparkle.s3 { bottom: 20%; left: -16px; animation-delay: .8s; }
+@keyframes twinkle { 0%, 100% { transform: scale(.6); opacity: .3; } 50% { transform: scale(1.2); opacity: 1; } }
+.balloons { display: flex; justify-content: center; gap: 6px; height: 64px; align-items: flex-end; }
+.balloon { width: 28px; height: 36px; border-radius: 50% 50% 48% 48%; background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.7), transparent 30%), var(--bc); position: relative; box-shadow: inset -3px -4px 0 rgba(0,0,0,.08); animation: floaty2 3s ease-in-out infinite; animation-delay: calc(var(--i) * .3s); }
+.balloon::after { content: ''; position: absolute; left: 50%; top: 100%; width: 1px; height: 22px; background: #ADB5BD; }
+.balloon[style*="#FFFFFF"] { border: 1px solid #DEE2E6; }
+@keyframes floaty2 { 50% { transform: translateY(-8px) rotate(3deg); } }
+.planner { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; align-items: start; }
+.plan-preview { position: sticky; top: 86px; padding: 16px; display: flex; flex-direction: column; gap: 8px; align-items: stretch; text-align: center; background: linear-gradient(170deg, var(--t1), var(--t2)); border: 4px solid #fff; }
+.plan-theme { font-family: var(--font-head); font-weight: 800; font-size: 1.4rem; margin-top: 18px; }
+.plan-cake { width: 160px; height: 160px; margin: 0 auto; }
+.plan-decor { font-size: 26px; letter-spacing: 4px; min-height: 30px; }
+.plan-total { background: rgba(255,255,255,.8); border-radius: 14px; padding: 8px; }
+.plan-opts { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.kid-star { width: 80px; height: 116px; margin: 16px auto 0; }
+.kid-star svg { width: 100%; height: 100%; overflow: visible; }
+.kid-star.small { width: 64px; height: 92px; margin: 0; }
+.invite { position: relative; background: var(--ic); border: 3px dashed rgba(0,0,0,.15); border-radius: 18px; padding: 12px 10px; display: flex; flex-direction: column; gap: 2px; text-align: center; font-size: .9rem; transform: rotate(-1.5deg); box-shadow: 0 6px 14px rgba(0,0,0,.08); }
+.invite b { font-family: var(--font-head); font-size: 1.15rem; }
+.inv-sticker { position: absolute; top: -12px; left: -8px; font-size: 26px; }
+.inv-sticker.r { left: auto; right: -8px; top: auto; bottom: -12px; }
+.guest-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.guest { display: flex; flex-direction: column; align-items: center; width: 84px; padding: 6px 4px; border-radius: 16px; border: 3px solid #F1EEFF; background: #FBFAFF; cursor: pointer; font-size: .78rem; }
+.guest.on { border-color: #F06595; background: #FFF0F6; }
+.guest.on::after { content: '💌'; font-size: .9rem; }
+.guest small { color: var(--ink-soft); font-size: .66rem; }
+.bday-card .btn { margin-left: 0; }
+.booked { margin-top: 4px; background: #FFF0F6; border-radius: 12px; padding: 6px 10px; }
+.rsvps { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.rsvp { font-size: .82rem; border-radius: 999px; padding: 2px 10px; background: #D3F9D8; }
+.rsvp.no { background: #F1F3F5; color: var(--ink-soft); }
+.bday-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; }
+.bday-row { display: flex; gap: 10px; padding: 10px; border-radius: 18px; background: #FBFAFF; border: 3px solid #F1EEFF; }
+.bday-row.now { background: #FFF0F6; border-color: #FFC9DE; }
+.bday-row .npc-av { width: 48px; height: 48px; flex: none; }
+.bday-row .btn-row { gap: 5px; margin-top: 6px; }
+.bday-row .btn.small { min-height: 34px; padding: 4px 9px; font-size: .78rem; }
+.fest-pick { margin-bottom: 10px; }
+.fest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.fest { padding: 12px; border-radius: 20px; background: #F8F9FA; border: 3px solid #E9ECEF; opacity: .8; }
+.fest.active { opacity: 1; background: linear-gradient(160deg, #FFF3BF, #fff); border-color: #FFD43B; box-shadow: var(--shadow); }
+.fest-christmas.active { background: linear-gradient(160deg, #D3F9D8, #FFE3E3); border-color: #69DB7C; }
+.fest-halloween.active { background: linear-gradient(160deg, #FFD8A8, #E5DBFF); border-color: #FF922B; }
+.fest-easter.active { background: linear-gradient(160deg, #FFF9DB, #E6FCF5); border-color: #FFE066; }
+.fest-head { display: flex; gap: 10px; align-items: center; }
+.fest-emoji { font-size: 40px; }
+.fest .btn-row { gap: 6px; }
+.fest-later { margin-top: 8px; color: var(--ink-soft); }
+.presents { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 8px 0; }
+.present { width: 96px; min-height: 104px; border: 0; background: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px; padding: 2px; }
+.present .wrap { font-size: 58px; line-height: 1; animation: wiggle 1.8s ease-in-out infinite; }
+.present .inside { display: none; font-size: 44px; line-height: 1; flex-direction: column; align-items: center; }
+.present .inside small { font-size: .7rem; font-weight: 600; line-height: 1.1; margin-top: 2px; }
+.present .from { font-size: .66rem; color: var(--ink-soft); }
+.present.open .wrap { display: none; }
+.present.open .inside { display: flex; animation: spinIn .6s cubic-bezier(.2,1.6,.4,1); }
+.presents.one .present { width: 160px; }
+.party-scene { border-radius: 20px; padding: 10px; background: linear-gradient(170deg, var(--t1), var(--t2)); margin: 4px 0 8px; }
+.party-decor { font-size: 28px; letter-spacing: 6px; margin-top: 18px; }
+.party-guests { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.pg { display: flex; flex-direction: column; align-items: center; font-size: .7rem; }
+.pg .npc-av { width: 44px; height: 44px; animation: bob 1.4s infinite; }
+.modal.party-modal { background: linear-gradient(180deg, #FFF0F6, #fff 40%); border-color: #FFDEEB; }
+@media (max-width: 900px) { .planner { grid-template-columns: 1fr; } .plan-preview { position: static; } }
+
+.kid-cake-row { display: flex; align-items: flex-end; justify-content: center; gap: 4px; margin-top: 10px; }
+.kid-cake-row .bday-cake { width: 140px; height: 140px; margin: 0; }
+.kid-cake-row .kid-star.small { width: 80px; height: 116px; }

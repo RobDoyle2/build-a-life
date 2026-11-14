@@ -119,6 +119,8 @@
       pk.classList.add('on');
       return;
     }
+    var uw = e.target.closest('[data-unwrap]');
+    if (uw) { if (!uw.classList.contains('open')) { uw.classList.add('open'); BAL.sound('sticker'); confetti(false); } return; }
     var mxb = e.target.closest('[data-mx]');
     if (mxb && S.modal && S.modal.x) { var fx2 = S.modal.x[+mxb.getAttribute('data-mx')]; stopSpeaking(); nextModal(); if (fx2) fx2(); render(); return; }
     var tb = e.target.closest('[data-mbtn-trip]');
@@ -512,6 +514,7 @@
     { id: 'health', name: 'Health', emoji: '🏥', color: '#FF5D73' },
     { id: 'chores', name: 'My Day', emoji: '☀️', color: '#20C997' },
     { id: 'explore', name: 'Explore', emoji: '🗺️', color: '#3A86FF' },
+    { id: 'celebrate', name: 'Celebrate', emoji: '🎉', color: '#E64980' },
     { id: 'story', name: 'My Story', emoji: '📖', color: '#F59F00' }
   ];
 
@@ -530,6 +533,7 @@
       if (tb.id === 'chores' && (coreLeft || choresLeft)) badge = '<span class="badge">' + (coreLeft || choresLeft) + '</span>';
       if (tb.id === 'health' && l.sick) badge = '<span class="badge">!</span>';
       if (tb.id === 'money' && l.owed > 0) badge = '<span class="badge">!</span>';
+      if (tb.id === 'celebrate') { var nb = G.kidsAtHome(l).filter(function (k) { return k.kid && k.kid.bday; }).length + (G.familyBirthdays ? G.familyBirthdays(l).filter(function (x) { return x.now && !x.done; }).length : 0); if (nb) badge = '<span class="badge">' + nb + '</span>'; }
       return '<button class="tab' + (S.tab === tb.id ? ' on' : '') + '" data-act="tab"' + a('id', tb.id) + ' style="--tc:' + tb.color + '"><span class="tab-emoji">' + emoji + '</span><span class="tab-name">' + name + '</span>' + badge + '</button>';
     }).join('');
     var pips = '';
@@ -570,6 +574,7 @@
       case 'story': return panelStory(l);
       case 'money': return panelMoney(l);
       case 'explore': return panelExplore(l);
+      case 'celebrate': return panelCelebrate(l);
       default: return panelActivities(l);
     }
   }
@@ -757,10 +762,6 @@
     var p = G.person(l, pid);
     kidPicker(l, pid, 'What\'s for dinner, ' + esc(p.name) + '?', '🥣', BAL.MEALS.map(function (m) { var c = G.price(l, m.cost); return { v: m.id, label: m.emoji + ' ' + m.name + ' <small>' + (c ? '🪙' + c : 'free') + '</small>' }; }), function (v) { act('feedChild', pid, v); });
   }
-  function kidBday(l, pid) {
-    var p = G.person(l, pid);
-    kidPicker(l, pid, 'Happy ' + p.age + 'th birthday, ' + esc(p.name) + '!', '🎂', BAL.CHILD_PARTIES.map(function (x) { var c = G.price(l, x.cost); return { v: x.id, label: x.emoji + ' ' + x.name + ' <small>' + (c ? '🪙' + fmt(c) : 'free') + '</small>', cls: 'pink' }; }), function (v) { act('celebrateChild', pid, v); });
-  }
   function kidPlay(l, pid) {
     var p = G.person(l, pid);
     kidPicker(l, pid, 'What shall we do, ' + esc(p.name) + '?', '🎈', G.kidPlay(p).map(function (x) { return { v: x.id, label: x.emoji + ' ' + x.name }; }), function (v) { act('playWithChild', pid, v); });
@@ -927,7 +928,7 @@
       case 'groceries': return groceriesBlock(l);
       case 'party': {
         var got = (l.partyItems || []).map(function (id) { var it = byId(BAL.ITEMS, id); return it ? it.emoji : ''; }).join(' ');
-        return '<div class="tip">🎂 Plan your next birthday party! Everything you buy here is used at your birthday — the more party things, the happier you and your friends will be. ' + (got ? '<br><b>Party so far:</b> ' + got : '') + '</div>';
+        return '<div class="tip">🎂 Plan your whole party — theme, cake, invitations — in the ' + btn('🎉 Celebrate', 'tab', a('id', 'celebrate'), 'small') + ' tab! Extra party things you buy here are used at your birthday too — the more party things, the happier you and your friends will be. ' + (got ? '<br><b>Party so far:</b> ' + got : '') + '</div>';
       }
       case 'home': case 'decor': return '<div class="tip">🏡 Furniture and decorations make your home cosy: every 2 you own give you extra happiness on each birthday (cosiness now: +' + G.cosiness(l) + ' 😊). They move with you!</div>';
       case 'everyday': return '<div class="tip">🧴 Everyday shopping — the little things that keep you clean, healthy and ready for the day.</div>';
@@ -1454,6 +1455,191 @@
     }, reduced() ? 0 : 1500);
   }
 
+  /* ====================== Celebrations ====================== */
+  function balloonsArt(color, n) {
+    var out = '';
+    for (var i = 0; i < (n || 5); i++) {
+      var c = i % 2 ? color : BAL.BALLOON_COLORS[(BAL.BALLOON_COLORS.indexOf(color) + i) % BAL.BALLOON_COLORS.length];
+      out += '<span class="balloon" style="--bc:' + c + ';--i:' + i + '"></span>';
+    }
+    return '<div class="balloons" aria-hidden="true">' + out + '</div>';
+  }
+  function inviteCard(l, plan, forName) {
+    var th = byId(BAL.PARTY_THEMES, plan.theme), st = byId(BAL.INVITE_STYLES, plan.invite) || BAL.INVITE_STYLES[0], v = byId(BAL.VENUES, plan.venue);
+    var age = l.age + 1;
+    return '<div class="invite" style="--ic:' + st.color + '"><span class="inv-sticker">' + st.emoji + '</span><small>You\'re invited' + (forName ? ', ' + esc(forName) : '') + '!</small>' +
+      '<b>' + esc(l.name) + '\'s ' + G.ordinal(age) + ' Birthday</b><span>' + th.emoji + ' ' + esc(th.name) + ' party</span><span>' + v.emoji + ' ' + esc(v.name) + '</span><span>📅 ' + G.bdayText(l.bday) + '</span><span class="inv-sticker r">' + st.emoji + '</span></div>';
+  }
+  function plannerView(l) {
+    var p = S.planner, age = l.age + 1, th = byId(BAL.PARTY_THEMES, p.theme);
+    var cost = G.partyCost(G.cleanPlan(l, p), l), fam = Math.min(cost, G.familyPartyBudget(l));
+    function tiles(list, key, val, extra) {
+      return '<div class="tile-grid">' + list.map(function (x) {
+        var c = x.cost !== undefined ? (age >= 17 ? G.price(l, x.cost) : x.cost) : null;
+        return '<button class="tile' + (val === x.id ? ' on' : '') + '" data-act="plan"' + a('k', key) + a('v', x.id) + '><span class="tile-emoji">' + x.emoji + '</span><span class="tile-name">' + esc(x.name) + '</span>' + (c !== null ? '<span class="tile-lock got">' + (c ? '🪙 ' + fmt(c) : 'free') + '</span>' : '') + (extra ? extra(x) : '') + '</button>';
+      }).join('') + '</div>';
+    }
+    var guests = G.partyGuestsPool(l);
+    return head('🎂', 'Plan your ' + G.ordinal(age) + ' birthday party!', 'Your birthday is on ' + G.bdayText(l.bday) + '. The party happens when you Age Up.') +
+      '<div class="planner"><div class="plan-preview card" style="--t1:' + th.colors[0] + ';--t2:' + th.colors[1] + '">' + balloonsArt(p.balloons, 5) +
+      '<div class="plan-theme">' + th.emoji + ' ' + esc(th.name) + '</div><div class="plan-cake">' + BAL.cakeArt(p.cake, Math.min(age, 10), true, { age: age, theme: th.emoji }) + '</div>' +
+      '<div class="plan-decor">' + p.decor.map(function (id) { return byId(BAL.DECORATIONS, id).emoji; }).join(' ') + '</div>' + inviteCard(l, p) +
+      '<div class="plan-total">Total: <b>🪙 ' + fmt(cost) + '</b>' + (fam ? '<br><small>Your family pays ' + fmt(fam) + ' — you pay ' + fmt(cost - fam) + '</small>' : '') + '</div>' +
+      btn('📅 Book my party!', 'planBook', '', 'primary huge') + btn('Cancel', 'planClose', '', 'ghost') + '</div>' +
+      '<div class="plan-opts">' +
+      '<section class="card opt"><h3>🎨 Party theme</h3>' + tiles(G.themesFor(age), 'theme', p.theme) + '</section>' +
+      '<section class="card opt"><h3>🎂 Birthday cake</h3><h4>Flavour</h4><div class="pick-row">' + BAL.CAKE_FLAVOURS.map(function (f) { return '<button class="pick chip' + (p.cake.flavour === f.id ? ' on' : '') + '" data-act="plan"' + a('k', 'flavour') + a('v', f.id) + '>' + f.emoji + ' ' + f.name + '</button>'; }).join('') + '</div>' +
+      '<h4>Shape</h4>' + tiles(BAL.CAKE_SHAPES, 'shape', p.cake.shape) +
+      '<h4>On top</h4><div class="pick-row">' + BAL.CAKE_TOPPERS.map(function (t) { return '<button class="pick chip' + (p.cake.topper === t.id ? ' on' : '') + '" data-act="plan"' + a('k', 'topper') + a('v', t.id) + '>' + (t.id === 'theme' ? th.emoji : t.emoji) + ' ' + t.name + '</button>'; }).join('') + '</div></section>' +
+      '<section class="card opt"><h3>🎊 Decorations</h3><p class="small muted">Pick as many as you like!</p><div class="tile-grid">' + BAL.DECORATIONS.map(function (d) {
+        var on = p.decor.indexOf(d.id) >= 0, c = age >= 17 ? G.price(l, d.cost) : d.cost;
+        return '<button class="tile' + (on ? ' on' : '') + '" data-act="plan"' + a('k', 'decor') + a('v', d.id) + '><span class="tile-emoji">' + d.emoji + '</span><span class="tile-name">' + d.name + '</span><span class="tile-lock got">' + (c ? '🪙 ' + c : 'free') + '</span></button>';
+      }).join('') + '</div><h4>🎈 Balloon colour</h4><div class="pick-row">' + BAL.BALLOON_COLORS.map(function (c) { return '<button class="pick swatch' + (p.balloons === c ? ' on' : '') + '" data-act="plan"' + a('k', 'balloons') + a('v', c) + ' style="background:' + c + '" aria-label="Balloon colour ' + c + '"></button>'; }).join('') + '</div></section>' +
+      '<section class="card opt"><h3>📍 Where?</h3>' + tiles(G.venuesFor(age), 'venue', p.venue) + '</section>' +
+      '<section class="card opt"><h3>💌 Invitations</h3><h4>Who\'s invited? <small>(' + p.guests.length + ' guests)</small></h4>' + (guests.length ? '<div class="guest-pick">' + guests.map(function (g) {
+        var on = p.guests.indexOf(g.id) >= 0;
+        return '<button class="guest' + (on ? ' on' : '') + '" data-act="plan"' + a('k', 'guest') + a('v', g.id) + '><span class="npc-av">' + BAL.avatar(g.look, g.age, 85, { bg: '#fff' }) + '</span><b>' + esc(g.name) + '</b><small>' + esc(G.relLabel(g)) + '</small></button>';
+      }).join('') + '</div>' : '<p class="small muted">Make some friends to invite!</p>') +
+      '<h4>Invitation design</h4><div class="pick-row">' + BAL.INVITE_STYLES.map(function (s2) { return '<button class="pick chip' + (p.invite === s2.id ? ' on' : '') + '" data-act="plan"' + a('k', 'invite') + a('v', s2.id) + ' style="background:' + s2.color + '">' + s2.emoji + '</button>'; }).join('') + '</div></section>' +
+      '</div></div>';
+  }
+  function kidPlannerView(l) {
+    var k = S.kidPlanner, p = G.person(l, k.pid);
+    if (!p || !p.kid || !p.kid.bday) { S.kidPlanner = null; return panelCelebrate(l); }
+    var th = byId(BAL.PARTY_THEMES, k.theme) || byId(BAL.PARTY_THEMES, 'family');
+    var cost = G.price(l, byId(BAL.CHILD_PARTIES, k.level).cost) + G.price(l, byId(BAL.CAKE_SHAPES, k.shape).cost) + G.price(l, byId(BAL.CHILD_PRESENTS, k.present).cost);
+    function chips(list, key, val, show) { return '<div class="tile-grid">' + list.map(function (x) { return '<button class="tile' + (val === x.id ? ' on' : '') + '" data-act="kplan"' + a('k', key) + a('v', x.id) + '><span class="tile-emoji">' + x.emoji + '</span><span class="tile-name">' + esc(x.name) + '</span>' + (show ? '<span class="tile-lock got">' + show(x) + '</span>' : '') + '</button>'; }).join('') + '</div>'; }
+    var price = function (x) { var c = G.price(l, x.cost); return c ? '🪙 ' + fmt(c) : 'free'; };
+    return head('🎂', esc(p.name) + '\'s ' + G.ordinal(p.age) + ' birthday!', 'Born on ' + G.bdayText(p.bday) + '. Plan a party they\'ll never forget!') +
+      '<div class="planner"><div class="plan-preview card" style="--t1:' + th.colors[0] + ';--t2:' + th.colors[1] + '">' + balloonsArt('#F783AC', 5) +
+      '<div class="kid-star">' + BAL.avatar(p.look, p.age, 95, { full: true }) + '</div><div class="plan-theme">' + th.emoji + ' ' + esc(th.name) + '</div>' +
+      '<div class="plan-cake">' + BAL.cakeArt({ flavour: k.flavour, shape: k.shape, topper: 'theme' }, Math.min(p.age, 10), true, { age: p.age, theme: th.emoji }) + '</div>' +
+      '<div class="plan-total">Total: <b>🪙 ' + fmt(cost) + '</b></div>' + btn('🎉 Celebrate!', 'kplanGo', '', 'pink huge') + btn('Cancel', 'kplanClose', '', 'ghost') + '</div>' +
+      '<div class="plan-opts"><section class="card opt"><h3>🎨 Theme</h3>' + chips(G.themesFor(p.age), 'theme', k.theme) + '</section>' +
+      '<section class="card opt"><h3>🎂 Cake</h3><div class="pick-row">' + BAL.CAKE_FLAVOURS.map(function (f) { return '<button class="pick chip' + (k.flavour === f.id ? ' on' : '') + '" data-act="kplan"' + a('k', 'flavour') + a('v', f.id) + '>' + f.emoji + ' ' + f.name + '</button>'; }).join('') + '</div><h4>Shape</h4>' + chips(BAL.CAKE_SHAPES, 'shape', k.shape, price) + '</section>' +
+      '<section class="card opt"><h3>🎈 The party</h3>' + chips(BAL.CHILD_PARTIES, 'level', k.level, price) + '</section>' +
+      '<section class="card opt"><h3>🎁 Your present</h3>' + chips(BAL.CHILD_PRESENTS.filter(function (x) { return !x.minAge || p.age >= x.minAge; }), 'present', k.present, price) + '</section></div></div>';
+  }
+
+  function panelCelebrate(l) {
+    G.ensureBirthdays(l);
+    if (S.planner) return plannerView(l);
+    if (S.kidPlanner) return kidPlannerView(l);
+    var out = head('🎉', 'Celebrations', 'Birthdays, parties and festivals all year round!');
+    // my birthday
+    var next = l.age + 1;
+    out += '<h3 class="sub">🎂 Your birthday</h3><div class="info-card bday-card"><span class="big-emoji">🎂</span><div class="grow"><b class="lg">' + G.bdayText(l.bday) + '</b><div>Next birthday: turning <b>' + next + '</b> when you Age Up.</div>';
+    if (l.party && l.party.booked) {
+      var th = byId(BAL.PARTY_THEMES, l.party.theme);
+      out += '<div class="booked">' + th.emoji + ' <b>' + esc(th.name) + ' party booked!</b> ' + byId(BAL.VENUES, l.party.venue).emoji + ' ' + esc(byId(BAL.VENUES, l.party.venue).name) + '</div>';
+      if (l.party.rsvp) out += '<div class="rsvps">' + l.party.guests.map(function (id) { var g = G.person(l, id); if (!g) return ''; var r = l.party.rsvp[id]; return '<span class="rsvp ' + (r === 'yes' ? 'yes' : 'no') + '">' + (r === 'yes' ? '✅' : '😢') + ' ' + esc(g.name) + (r === 'yes' ? '' : ' <small>(' + (r === 'holiday' ? 'on holiday' : r) + ')</small>') + '</span>'; }).join('') + '</div>';
+      out += '</div>' + (l.party.rsvp ? '' : btn('💌 Send invitations', 'invites', '', 'pink')) + btn('↩️ Cancel', 'confirm', a('fn', 'cancelParty'), 'small ghost') + '</div>';
+    } else out += '</div>' + (l.age >= 2 ? btn('🎉 Plan my party!', 'planOpen', '', 'pink big') : '<span class="small muted">Your family is planning your birthday! 🍼</span>') + '</div>';
+    // children
+    var kids = G.kidsAtHome(l).filter(function (p) { return p.kid && p.kid.bday; });
+    if (kids.length) out += '<h3 class="sub">🧸 Your children\'s birthdays</h3><div class="mini-grid">' + kids.map(function (p) {
+      return '<div class="mini-card"><span class="mini-full">' + BAL.avatar(p.look, p.age, 90, { full: true }) + '</span><b>' + esc(p.name) + ' is ' + p.age + '!</b><small>📅 ' + G.bdayText(p.bday) + '</small>' + btn('🎉 Plan the party', 'kidBday', a('id', p.id), 'small pink') + '</div>';
+    }).join('') + '</div>';
+    // family & friends
+    var fb = G.familyBirthdays(l);
+    if (fb.length) out += '<h3 class="sub">📅 Family & friends\' birthdays <small>(celebrate when it\'s their season in My Day — now: ' + BAL.DAYS[G.season(l)].emoji + ' ' + BAL.DAYS[G.season(l)].name.replace(' day', '') + ')</small></h3><div class="bday-list">' + fb.map(function (x) {
+      var p = x.p;
+      var acts = x.done ? '<span class="tag ok">✓ Celebrated!</span>' : x.now ? BAL.FAMILY_BDAY_WAYS.filter(function (w) { return !w.adult || l.age >= 16; }).map(function (w) { var c = l.age < 16 ? Math.min(w.cost, 10) : G.price(l, w.cost); return btn(w.emoji + ' ' + w.name + ' <small>' + (c ? '🪙' + c : 'free') + '</small>', 'do', a('fn', 'familyBirthday') + a('a1', p.id) + a('a2', w.id), 'small'); }).join('') : '<span class="small muted">' + BAL.DAYS[G.bdaySeason(p.bday)].emoji + ' later this year</span>';
+      return '<div class="bday-row' + (x.now && !x.done ? ' now' : '') + '"><span class="npc-av">' + BAL.avatar(p.look, p.age, 85, { bg: '#fff' }) + '</span><div class="grow"><b>' + esc(p.name) + '</b> <span class="role">' + esc(G.relLabel(p)) + '</span><div class="small muted">🎂 ' + G.bdayText(p.bday) + (x.now && !x.done ? ' — <b>it\'s their birthday season!</b>' : '') + '</div><div class="btn-row">' + acts + '</div></div></div>';
+    }).join('') + '</div>';
+    // festivals
+    out += '<h3 class="sub">🗓️ Seasonal celebrations <small>(choose the ones your family celebrates — tap to switch on or off)</small></h3><div class="pick-row fest-pick">' + BAL.FESTIVALS.map(function (f) {
+      var on = l.festivals.indexOf(f.id) >= 0;
+      return '<button class="pick chip' + (on ? ' on' : '') + '" data-act="do" data-fn="toggleFestival"' + a('a1', f.id) + ' aria-pressed="' + on + '">' + (on ? '✓ ' : '') + f.emoji + ' ' + f.name + '</button>';
+    }).join('') + '</div>';
+    var chosen = BAL.FESTIVALS.filter(function (f) { return l.festivals.indexOf(f.id) >= 0; }).sort(function (x, y) { return (G.festivalActive(l, y) - G.festivalActive(l, x)) || ((x.season - G.season(l) + 4) % 4) - ((y.season - G.season(l) + 4) % 4); });
+    out += chosen.length ? '<div class="fest-grid">' + chosen.map(function (f) {
+      var active = G.festivalActive(l, f);
+      return '<div class="fest' + (active ? ' active' : '') + ' fest-' + f.id + '"><div class="fest-head"><span class="fest-emoji">' + f.emoji + '</span><div><b>' + f.name + '</b><div class="small">' + esc(f.desc) + '</div></div></div>' +
+        (active ? '<div class="btn-row">' + f.acts.map(function (x) {
+          var done = l.flags.fest[f.id + ':' + x.id] === l.age;
+          return done ? '<span class="tag ok">✓ ' + x.emoji + ' ' + x.name + '</span>' : btn(x.emoji + ' ' + x.name, 'fest', a('f', f.id) + a('x', x.id), 'small primary');
+        }).join('') + '</div>' : '<div class="small fest-later">' + BAL.DAYS[f.season].emoji + ' Coming in ' + BAL.DAYS[f.season].name.replace(' day', '').toLowerCase() + ' — sleep through My Day to get there!</div>') + '</div>';
+    }).join('') + '</div>' : '<p class="small muted">No seasonal celebrations chosen — that\'s fine too!</p>';
+    return out;
+  }
+
+  function festActivity(l, fid, xid) {
+    var f = G.festival(fid), x = byId(f.acts, xid);
+    if (!G.festivalActive(l, f)) { feedback(G.run(l, 'festivalActivity', fid, xid)); return; }
+    if (x.kind === 'tap') {
+      var cells = [];
+      for (var i = 0; i < x.n; i++) cells.push({ e: G.pick(x.target), target: true });
+      while (cells.length < 12) cells.push({ e: G.pick(x.other), target: false });
+      cells.sort(function () { return Math.random() - 0.5; });
+      S.game = { fest: [fid, xid], type: 'tap', c: { emoji: x.emoji, name: f.name + ': ' + x.name }, title: x.title, cells: cells, done: '✨', score: 0, total: x.n };
+      BAL.sound('click'); renderMini(); return;
+    }
+    if (x.kind === 'choose') {
+      openModal({ emoji: x.emoji, title: esc(x.name), html: '<p class="lead">' + esc(x.q) + '</p>',
+        buttons: x.options.map(function (o, i) { return { label: o[0] + ' ' + esc(o[1]), cls: 'primary', fn: function () { act('festivalActivity', fid, xid, { choice: i }); } }; }).concat([{ label: 'Later', cls: 'ghost' }]) });
+      return;
+    }
+    if (x.kind === 'gift') {
+      var res = G.run(l, 'festivalActivity', fid, xid);
+      if (!res.ok) { feedback(res); return; }
+      save(); render();
+      openModal({ emoji: f.emoji, title: esc(x.name), cls: 'birthday', html: '<p>Tap the present to open it!</p><div class="presents one"><button class="present" data-unwrap="' + esc(res.gift) + '"><span class="wrap">🎁</span><span class="inside">' + esc(res.gift) + '</span></button></div>',
+        buttons: [{ label: 'Thank you! 💛' }] });
+      showAchievements(l); goalFeedback(res.goalsDone);
+      return;
+    }
+    act('festivalActivity', fid, xid);
+  }
+  function invitesModal(l) {
+    var p = l.party; if (!p || p.rsvp) return;
+    var names = p.guests.map(function (id) { var g = G.person(l, id); return g ? g.name : ''; }).filter(Boolean);
+    openModal({ emoji: '💌', title: 'Send your invitations', html: inviteCard(l, p) + '<p>' + (names.length ? 'To: <b>' + esc(names.join(', ')) + '</b>' : 'You haven\'t picked any guests yet — your family will still celebrate with you!') + '</p>',
+      buttons: names.length ? [{ label: '💌 Send them!', cls: 'pink', fn: function () {
+        var r = G.run(life(), 'sendInvites'); save(); render();
+        var lp = life().party;
+        if (r.ok && lp && lp.rsvp) {
+          var yes = [], no2 = [];
+          lp.guests.forEach(function (id) { var g = G.person(life(), id); if (!g) return; (lp.rsvp[id] === 'yes' ? yes : no2).push(g.name); });
+          setTimeout(function () { openModal({ emoji: '📬', title: 'Replies are in!', html: (yes.length ? '<p class="lead">✅ <b>' + esc(yes.join(', ')) + '</b> can come!</p>' : '') + (no2.length ? '<p>😢 ' + esc(no2.join(', ')) + ' can\'t make it this time.</p>' : ''), buttons: [{ label: 'Yay! 🎉' }], onOpen: function () { BAL.sound('tada'); confetti(false); } }); goalFeedback(r.goalsDone); }, 50);
+        } else feedback(r);
+      } }, { label: 'Not yet', cls: 'ghost' }] : [{ label: 'OK' }] });
+  }
+  function presentsHtml(presents) {
+    if (!presents.length) return '';
+    return '<p class="small muted">Tap each present to open it!</p><div class="presents">' + presents.map(function (p) {
+      return '<button class="present" data-unwrap="' + esc(p.emoji + ' ' + p.name) + '"><span class="wrap">🎁</span><span class="inside">' + esc(p.emoji) + '<small>' + esc(p.name) + '</small></span><small class="from">from ' + esc(p.from) + '</small></button>';
+    }).join('') + '</div>';
+  }
+  function partyModal(l, c) {
+    if (!c) return;
+    var th = c.theme;
+    var guests = c.guests.length ? '<div class="party-guests">' + c.guests.slice(0, 10).map(function (g) { return '<span class="pg"><span class="npc-av">' + BAL.avatar(g.look, g.age, 95, { bg: '#fff' }) + '</span><small>' + esc(g.name) + '</small></span>'; }).join('') + '</div>' : '';
+    var decor = (c.decor || []).map(function (id) { var d = byId(BAL.DECORATIONS, id); return d ? d.emoji : ''; }).join(' ');
+    var declined = c.declined && c.declined.length ? '<p class="small muted">' + c.declined.map(function (d) { return esc(d.name); }).join(', ') + ' couldn\'t come, but sent their love. 💛</p>' : '';
+    openModal({ emoji: th.emoji, title: c.planned ? 'Your ' + esc(th.name) + ' party!' : 'Birthday celebrations!', cls: 'party-modal',
+      html: '<div class="party-scene" style="--t1:' + th.colors[0] + ';--t2:' + th.colors[1] + '">' + balloonsArt(c.balloons, 7) + '<div class="party-decor">' + decor + '</div>' +
+        '<p>' + (c.venue ? c.venue.emoji + ' ' + esc(c.venue.name) : '') + (c.guests.length ? ' with ' + c.guests.length + ' guest' + (c.guests.length === 1 ? '' : 's') : '') + '</p>' + guests + '</div>' + declined + presentsHtml(c.presents),
+      buttons: [{ label: 'Best birthday ever! 🎉' }], onOpen: function () { BAL.sound('tada'); confetti(true); floaty(th.emoji); } });
+  }
+  function childPartyModal(cp) {
+    var th = cp.theme;
+    openModal({ emoji: '', title: 'Happy ' + G.ordinal(cp.age) + ' birthday, ' + esc(cp.name) + '!', cls: 'birthday',
+      html: '<div class="party-scene" style="--t1:' + th.colors[0] + ';--t2:' + th.colors[1] + '">' + balloonsArt('#F783AC', 6) +
+        '<div class="kid-cake-row"><div class="kid-star small">' + BAL.avatar(cp.look, cp.age, 98, { full: true }) + '</div><div class="bday-cake">' + BAL.cakeArt(cp.cake, Math.min(cp.age, 10), true, { age: cp.age, theme: th.emoji }) + '</div></div></div>' +
+        '<p class="lead">' + th.emoji + ' ' + esc(th.name) + ' party!</p><div class="presents one"><button class="present" data-unwrap="1"><span class="wrap">🎁</span><span class="inside">' + cp.present.emoji + '<small>' + esc(cp.present.name) + '</small></span><small class="from">from you</small></button></div>',
+      buttons: [{ label: '🌬️ Help them blow out the candles!', cls: 'pink', fn: blowCandles }], onOpen: function () { BAL.sound('birthday'); confetti(true); } });
+  }
+  function blowCandles(m) {
+    var c = m.querySelector('.bday-cake');
+    if (!c || c.classList.contains('blown')) return true;
+    c.classList.add('blown');
+    BAL.sound('tada'); confetti(true);
+    var b = m.querySelector('[data-mbtn="0"]'); if (b) b.innerHTML = 'Yay! 🎈';
+    var w = m.querySelector('.wish'); if (w) w.hidden = false;
+    return false;
+  }
+
   /* ====================== Challenges ====================== */
   function ordinal(n) { var s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
   function isFixed(l, c) { return c.fixed && c.fixed.indexOf(l.age) >= 0; }
@@ -1578,7 +1764,7 @@
     if (actName === 'gRetry') { var i = m.i, hw = m.hw, tx = m.tax; closeMini(); if (hw) playHomework(life(), hw); else if (tx) startTaxes(life()); else playGame(i); return; }
     if (actName === 'gTap') {
       var ci = +el.getAttribute('data-i'), cell = m.cells[ci];
-      if (cell.target && !cell.cleaned) { cell.cleaned = true; m.score += 1; m.wrong = null; BAL.sound('good'); renderMini(); if (m.score >= m.total) setTimeout(function () { var r = G.run(life(), 'doTask', m.daytask, { score: m.score, total: m.total }); closeMini(); dayResult(r); if (r.ok) confetti(false); }, 350); }
+      if (cell.target && !cell.cleaned) { cell.cleaned = true; m.score += 1; m.wrong = null; BAL.sound('good'); renderMini(); if (m.score >= m.total) setTimeout(function () { if (m.fest) { closeMini(); act('festivalActivity', m.fest[0], m.fest[1], { score: m.score, total: m.total }); return; } var r = G.run(life(), 'doTask', m.daytask, { score: m.score, total: m.total }); closeMini(); dayResult(r); if (r.ok) confetti(false); }, 350); }
       else if (!cell.target) { m.wrong = ci; BAL.sound('bad'); renderMini(); setTimeout(function () { if (S.game === m) { m.wrong = null; renderMini(); } }, 400); }
       return;
     }
@@ -1630,15 +1816,17 @@
     var moneyHtml = rep.money.length ? '<details class="money"' + (l.age === 18 || l.age === 19 ? ' open' : '') + '><summary>🪙 This year\'s coins: <b class="' + (rep.net < 0 ? 'neg' : 'pos') + '">' + (rep.net >= 0 ? '+' : '') + fmt(rep.net) + '</b></summary><ul>' +
       plus.concat(minus).map(function (m) { return '<li><span>' + m.e + ' ' + esc(m.t) + '</span><b class="' + (m.v < 0 ? 'neg' : 'pos') + '">' + (m.v > 0 ? '+' : '') + fmt(m.v) + '</b></li>'; }).join('') + '</ul></details>' : '';
     var lines = rep.lines.concat(rep.notes).map(function (x) { return '<li><span>' + x.e + '</span> ' + esc(x.t) + '</li>'; }).join('');
-    var candles = Math.min(l.age, 10);
-    var cake = '<div class="cake-art" aria-hidden="true"><div class="candles">' + new Array(candles + 1).join('<i></i>') + '</div><div class="cake-top"></div><div class="cake-body"><span>' + l.age + '</span></div></div>';
+    var cel = rep.celebration || { cake: { flavour: 'chocolate', shape: 'round', topper: 'sprinkles' }, theme: byId(BAL.PARTY_THEMES, 'family') };
+    var cake = '<div class="grow-up" aria-hidden="true"><span class="gu-old">' + BAL.avatar(l.look, l.age - 1, 90, { full: true }) + '</span><span class="gu-arrow">➜</span><span class="gu-new">' + BAL.avatar(l.look, l.age, 95, { full: true }) + '<i class="sparkle s1">✨</i><i class="sparkle s2">⭐</i><i class="sparkle s3">✨</i></span></div>' +
+      '<div class="bday-cake">' + BAL.cakeArt(cel.cake, Math.min(l.age, 10), true, { age: l.age, theme: cel.theme.emoji }) + '</div><p class="wish" hidden>✨ You made a wish! ✨</p>';
     openModal({ cls: 'birthday', title: rep.ended ? 'Happy ' + l.age + 'th Birthday!' : '🎉 Happy Birthday, ' + esc(l.name) + '! 🎉',
       html: cake + '<p class="lead">You are now <b>' + l.age + '</b> year' + (l.age === 1 ? '' : 's') + ' old!</p>' +
         '<p class="gift">🎁 You got ' + esc(rep.gift.item) + (rep.gift.coins ? ' and <b>' + rep.gift.coins + ' coins</b> from your family!' : '!') + '</p>' +
-        (rep.party ? '<p class="gift">🥳 Your party had ' + esc(rep.party.join(', ')) + '!</p>' : '') +
+        (rep.party ? '<p class="gift">🥳 Your party also had ' + esc(rep.party.join(', ')) + '!</p>' : '') +
         (lines ? '<ul class="year-lines">' + lines + '</ul>' : '') + moneyHtml,
-      buttons: rep.moneyTrouble && !rep.ended ? [{ label: 'OK' }, { label: '🛟 See my money rescue plan', cls: 'pink', fn: function () { S.queue.length = 0; S.tab = 'money'; } }] : rep.newGroup && !rep.ended ? [{ label: 'Yay! 🎈' }, { label: '🪞 Style my new look', cls: 'pink', fn: function () { S.queue.length = 0; startLookEditor('clothes'); } }] : [{ label: 'Yay! 🎈' }],
+      buttons: [{ label: '🌬️ Make a wish & blow out the candles!', cls: 'pink', fn: blowCandles }].concat(rep.moneyTrouble && !rep.ended ? [{ label: '🛟 See my money rescue plan', cls: 'ghost', fn: function () { S.queue.length = 0; S.tab = 'money'; } }] : rep.newGroup && !rep.ended ? [{ label: '🪞 Style my new look', cls: 'ghost', fn: function () { S.queue.length = 0; startLookEditor('clothes'); } }] : []),
       onOpen: function () { BAL.sound('birthday'); confetti(true); floaty('🎈'); } });
+    if (rep.celebration && !rep.ended && (rep.celebration.guests.length || rep.celebration.presents.length)) partyModal(l, rep.celebration);
     rep.celebrations.forEach(function (c) {
       openModal({ emoji: c.e, title: esc(c.t), html: '<p class="lead">' + esc(c.d) + '</p>', buttons: [{ label: 'Hooray! 🎉' }], onOpen: function () { BAL.sound('tada'); confetti(false); } });
     });
@@ -1752,7 +1940,7 @@
       case 'edSave': edSave(); break;
       case 'townType': S.townType = d('v'); BAL.sound('click'); render(); break;
       case 'edCancel': S.ed = null; S.screen = 'game'; BAL.sound('click'); render(); break;
-      case 'tab': S.adopt = null; S.petShop = null; S.tab = d('id'); BAL.sound('click'); render(); var pn = document.getElementById('panel'); if (pn && window.innerWidth < 900) pn.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' }); break;
+      case 'tab': S.adopt = null; S.petShop = null; if (d('id') !== 'celebrate') { S.planner = null; S.kidPlanner = null; } S.tab = d('id'); BAL.sound('click'); render(); var pn = document.getElementById('panel'); if (pn && window.innerWidth < 900) pn.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' }); break;
       case 'shopCat': S.shopCat = d('id'); BAL.sound('click'); render(); break;
       case 'ageUp': ageUp(); break;
       case 'go': if (!S.travelAnim) goTo(l, d('id')); break;
@@ -1785,7 +1973,23 @@
       case 'petShop': S.petShop = d('id'); BAL.sound('click'); render(); break;
       case 'petShopClose': S.petShop = null; BAL.sound('click'); render(); break;
       case 'kidFeed': kidFeed(l, d('id')); break;
-      case 'kidBday': kidBday(l, d('id')); break;
+      case 'kidBday': { var kp = G.person(l, d('id')); S.kidPlanner = { pid: kp.id, theme: G.themesFor(kp.age)[0].id, flavour: 'chocolate', shape: 'round', level: 'cake', present: 'card' }; S.planner = null; S.tab = 'celebrate'; BAL.sound('click'); render(); var pk = document.getElementById('panel'); if (pk) pk.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' }); break; }
+      case 'kplan': { var kk = d('k'), kv = d('v'); S.kidPlanner[kk] = kv; BAL.sound('click'); render(); break; }
+      case 'kplanClose': S.kidPlanner = null; BAL.sound('click'); render(); break;
+      case 'kplanGo': { var K = S.kidPlanner; var kr = G.run(l, 'childParty', K.pid, { theme: K.theme, level: K.level, present: K.present, cake: { flavour: K.flavour, shape: K.shape, topper: 'theme' } }); if (kr.ok) { S.kidPlanner = null; save(); render(); childPartyModal(kr.childParty); goalFeedback(kr.goalsDone); showAchievements(l); toast(kr.msg, '🎂', 'good', kr.diffs, kr.coinsDelta); } else feedback(kr); break; }
+      case 'planOpen': S.planner = G.newPartyPlan(l); S.kidPlanner = null; BAL.sound('click'); render(); window.scrollTo({ top: document.getElementById('panel').offsetTop - 80 }); break;
+      case 'planClose': S.planner = null; BAL.sound('click'); render(); break;
+      case 'plan': {
+        var P = S.planner, pk2 = d('k'), pv = d('v');
+        if (pk2 === 'flavour' || pk2 === 'shape' || pk2 === 'topper') P.cake[pk2] = pv;
+        else if (pk2 === 'decor') { var di = P.decor.indexOf(pv); if (di >= 0) P.decor.splice(di, 1); else P.decor.push(pv); }
+        else if (pk2 === 'guest') { var gi = P.guests.indexOf(pv); if (gi >= 0) P.guests.splice(gi, 1); else P.guests.push(pv); }
+        else P[pk2] = pv;
+        BAL.sound('click'); render(); break;
+      }
+      case 'planBook': { var br = G.run(l, 'bookParty', S.planner); if (br.ok) { S.planner = null; } feedback(br); if (br.ok) setTimeout(function () { invitesModal(life()); }, 300); break; }
+      case 'invites': invitesModal(l); break;
+      case 'fest': festActivity(l, d('f'), d('x')); break;
       case 'kidPlay': kidPlay(l, d('id')); break;
       case 'kidClothes': kidClothes(l, d('id')); break;
       case 'kidHw': if (l.energy < 1) { feedback({ ok: false, msg: 'You are out of energy ⚡! Have a rest first.', emoji: '😴' }); } else playHomework(l, d('id')); break;
@@ -1888,6 +2092,7 @@
       '<li><span>🛟</span> Run out of coins? Don\'t panic — the 🪙 Money tab has a rescue plan, and there are always odd jobs to do.</li>' +
       '<li><span>🐾</span> Adopt pets and make friends. Grown-ups can date, become a couple, move in, get married, buy a home together and raise children — feed them, help with homework, buy clothes, celebrate their birthdays and take them to the doctor.</li>' +
       '<li><span>💬</span> Tap <b>Talk</b> on anyone in your family to have a chat and choose what to say.</li>' +
+      '<li><span>🎉</span> In <b>Celebrate</b>, plan birthday parties (theme, cake, decorations, balloons, invitations), plan your children\'s parties, celebrate family birthdays and join in seasonal celebrations like Christmas, Halloween and Easter.</li>' +
       '<li><span>🗺️</span> Open <b>Explore</b> to travel around your town on the map, chat to people, try things out and take day trips to other towns and islands.</li>' +
       '<li><span>🪞</span> Tap <b>Change Your Look</b> to change clothes, hair and accessories any time — it\'s free!</li>' +
       '<li><span>🧑‍🤝‍🧑</span> Each player can save lots of <b>characters</b>, and every character has their own life.</li>' +
