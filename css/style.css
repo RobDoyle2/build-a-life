@@ -788,3 +788,40 @@ details.money li { display: flex; justify-content: space-between; gap: 10px; fon
   .map-me { width: 26px; height: 39px; }
   .npc { width: 84px; }
 }
+
+/* ---------- Family ---------- */
+.person.love { background: #FFF0F6; border-color: #FFC9DE; }
+.love-card { background: linear-gradient(160deg, #FFF0F6, #fff); border: 3px solid #FFDEEB; border-radius: 22px; padding: 10px; display: grid; gap: 8px; }
+.love-card > .person { border: 0; background: transparent; padding: 4px; }
+.love-steps { display: flex; align-items: center; gap: 0; overflow-x: auto; padding: 4px 2px; }
+.love-steps i { flex: 1 0 14px; height: 4px; background: #FFDEEB; border-radius: 2px; }
+.ls { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: .72rem; font-weight: 600; color: var(--ink-soft); min-width: 64px; text-align: center; }
+.ls b { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: #fff; border: 3px solid #FFDEEB; font-size: 1.1rem; }
+.ls.done b { background: #F06595; color: #fff; border-color: #F06595; }
+.ls.on { color: var(--ink); }
+.ls.on b { border-color: #F06595; box-shadow: 0 0 0 4px rgba(240,101,149,.2); animation: pulse 1.8s infinite; }
+.people-grid.kids { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+.child-card { background: #FFFBEA; border-color: #FFE8A3; }
+.child-av { width: 70px; height: 105px; flex: none; background: radial-gradient(ellipse at 50% 95%, rgba(0,0,0,.12) 0 24%, transparent 25%); }
+.child-av svg { width: 100%; height: 100%; overflow: visible; }
+.kid-stats { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 3px 6px; align-items: center; margin: 6px 0; font-size: .85rem; }
+.kid-stats .bar { height: 9px; }
+.needs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.need { font-size: .74rem; font-weight: 600; border-radius: 999px; padding: 2px 8px; background: #F1F3F5; color: #495057; }
+.need.ok { background: #D3F9D8; color: #2B8A3E; }
+.need.warn { background: #FFE8CC; color: #D9480F; }
+.need.party { background: #FFDEEB; color: #C2255C; animation: pulse 1.8s infinite; }
+.child-card .btn-row { gap: 5px; }
+.child-card .btn.small { min-height: 36px; padding: 5px 10px; font-size: .82rem; }
+.occasions { margin: 10px 0; }
+.occ-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.occ { display: flex; gap: 10px; padding: 12px; border-radius: 18px; background: linear-gradient(160deg, #FFF3BF, #fff); border: 3px solid #FFE066; }
+.occ.done { background: #EBFBEE; border-color: #B2F2BB; }
+.occ-emoji { font-size: 38px; }
+.occ .btn-row { gap: 5px; }
+.occ .btn.small { min-height: 36px; padding: 5px 10px; font-size: .8rem; }
+.outfit-pick { display: flex; justify-content: center; gap: 10px; margin: 10px 0; }
+.outfit { width: 110px; height: 160px; border-radius: 20px; border: 3px solid #E5DBFF; background: radial-gradient(ellipse at 50% 95%, rgba(0,0,0,.1) 0 24%, transparent 25%), #FBFAFF; cursor: pointer; padding: 8px; transition: transform .12s; }
+.outfit:hover { transform: translateY(-4px); border-color: var(--primary); }
+.outfit svg { width: 100%; height: 100%; overflow: visible; }
+@media (max-width: 560px) { .people-grid.kids { grid-template-columns: 1fr; } .outfit { width: 92px; height: 136px; } }

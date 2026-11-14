@@ -119,6 +119,8 @@
       pk.classList.add('on');
       return;
     }
+    var mxb = e.target.closest('[data-mx]');
+    if (mxb && S.modal && S.modal.x) { var fx2 = S.modal.x[+mxb.getAttribute('data-mx')]; stopSpeaking(); nextModal(); if (fx2) fx2(); render(); return; }
     var tb = e.target.closest('[data-mbtn-trip]');
     if (tb) { var tid = tb.getAttribute('data-mbtn-trip'); stopSpeaking(); nextModal(); var lt = life(); if (lt) { S.tab = 'explore'; act('dayTrip', tid); } return; }
     var rn = e.target.closest('[data-randname]');
@@ -653,47 +655,131 @@
 
   function personCard(l, p) {
     var role = BAL.ROLES[p.role] || { label: p.role, emoji: '🙂' };
-    var label = role.label;
-    if (p.role === 'parent') label = 'Parent';
-    if (p.role === 'sibling') label = p.gender === 'girl' ? 'Sister' : p.gender === 'boy' ? 'Brother' : 'Sibling';
-    if (p.role === 'spouse') label = p.gender === 'girl' ? 'Wife' : 'Husband';
-    if (p.role === 'child') label = (p.gender === 'girl' ? 'Daughter' : 'Son') + (p.age >= 18 ? ' (grown up)' : '');
-    if (p.role === 'grandchild') label = 'Grandchild';
-    var btns = btn('💬 Spend time <small>⚡</small>', 'do', a('fn', 'spendTime') + a('a1', p.id), 'small') + btn('🎁 Gift', 'do', a('fn', 'giveGift') + a('a1', p.id), 'small');
-    if (p.role === 'partner' || p.role === 'fiance' || p.role === 'spouse') btns += btn('🌹 Date <small>⚡</small>', 'do', a('fn', 'date') + a('a1', p.id), 'small');
-    if (p.role === 'partner') btns += btn('💍 Propose', 'do', a('fn', 'propose') + a('a1', p.id), 'small primary');
-    if (p.role === 'fiance') btns += btn('💒 Plan wedding', 'wedding', a('id', p.id), 'small primary');
-    if (p.role === 'partner' || p.role === 'fiance' || p.role === 'spouse') btns += btn('🍂', 'confirm', a('fn', 'separate') + a('a1', p.id) + ' title="Go separate ways" aria-label="Go separate ways"', 'small ghost');
-    return '<div class="person"><div class="person-av">' + BAL.avatar(p.look, p.age, p.close, { bg: '#fff' }) + '</div>' +
+    var label = G.relLabel(p);
+    if (p.role === 'child' && p.age < 18) return childCard(l, p);
+    var love = ['partner', 'fiance', 'spouse'].indexOf(p.role) >= 0;
+    var btns = btn('💬 Talk', 'convo', a('id', p.id), 'small primary') + btn('💞 Spend time <small>⚡</small>', 'do', a('fn', 'spendTime') + a('a1', p.id), 'small') + btn('🎁 Gift', 'do', a('fn', 'giveGift') + a('a1', p.id), 'small');
+    if (love) btns += btn('🌹 Date <small>⚡</small>', 'do', a('fn', 'date') + a('a1', p.id), 'small');
+    var extra = p.role === 'child' && p.grownJob && G.byId(BAL.JOBS, p.grownJob) ? ' · ' + G.byId(BAL.JOBS, p.grownJob).emoji + ' ' + G.byId(BAL.JOBS, p.grownJob).name : '';
+    return '<div class="person' + (love ? ' love' : '') + '"><div class="person-av">' + BAL.avatar(p.look, p.age, p.close, { bg: '#fff' }) + '</div>' +
       '<div class="grow"><div class="person-name"><b>' + esc(p.name) + '</b> <span class="role">' + role.emoji + ' ' + label + '</span></div>' +
-      '<div class="muted small">Age ' + p.age + (p.parentName ? ' · ' + esc(p.parentName) + '\'s baby' : '') + '</div>' + hearts(p.close) +
+      '<div class="muted small">Age ' + p.age + extra + (p.parentName ? ' · ' + esc(p.parentName) + '\'s baby' : '') + (p.livesWith ? ' · 🏡 lives with you' : '') + '</div>' + hearts(p.close) +
       '<div class="btn-row">' + btns + '</div></div></div>';
   }
 
+  function loveCard(l, p) {
+    var step = G.loveStep(p);
+    var steps = [['💘', 'Dating'], ['💕', p.gender === 'girl' ? 'Girlfriend' : 'Boyfriend'], ['🏡', 'Living together'], ['💍', 'Engaged'], ['💒', 'Married']];
+    var next = '';
+    if (step === 0) next = btn('💕 Ask to be your ' + (p.gender === 'girl' ? 'girlfriend' : 'boyfriend'), 'do', a('fn', 'askOut') + a('a1', p.id), 'small pink');
+    if (step >= 1 && !p.livesWith) next += btn('📦 Move in together', 'do', a('fn', 'moveIn') + a('a1', p.id), 'small');
+    if (p.role === 'partner' && step >= 1) next += btn('💍 Propose <small>ring</small>', 'do', a('fn', 'propose') + a('a1', p.id), 'small pink');
+    if (p.role === 'fiance') next += btn('💒 Plan the wedding', 'wedding', a('id', p.id), 'small pink');
+    if (p.livesWith && l.home.type !== 'own') next += btn('🔑 Buy a home together', 'tab', a('id', 'home'), 'small');
+    return '<div class="love-card">' + personCard(l, p) +
+      '<div class="love-steps">' + steps.map(function (s, i) { return '<span class="ls' + (i < step ? ' done' : i === step ? ' on' : '') + '"><b>' + (i < step ? '✓' : s[0]) + '</b>' + s[1] + '</span>'; }).join('<i></i>') + '</div>' +
+      (next ? '<div class="btn-row">' + next + '</div>' : '') +
+      '<div class="btn-row"><button class="btn small ghost" data-act="confirm" data-fn="separate" data-a1="' + esc(p.id) + '">🍂 Go separate ways</button></div></div>';
+  }
+
+  function childCard(l, p) {
+    var k = p.kid || G.ensureKid(p);
+    var needs = [];
+    needs.push('<span class="need' + (k.meals ? ' ok' : '') + '">🥣 ' + (k.meals ? 'Fed ' + k.meals + '/3' : 'Needs a meal') + '</span>');
+    if (p.age >= 5) needs.push('<span class="need' + (k.hw ? ' ok' : '') + '">📚 ' + (k.hw ? 'Homework ' + k.hw + '/3' : 'Homework to do') + '</span>');
+    if (k.outgrown) needs.push('<span class="need warn">👕 Grown out of clothes!</span>');
+    if (k.bday) needs.push('<span class="need party">🎂 Birthday to celebrate!</span>');
+    if (k.sick) needs.push('<span class="need warn">🤒 Has ' + esc(k.sick) + '</span>');
+    var b = btn('🥣 Feed', 'kidFeed', a('id', p.id), 'small') +
+      (p.age >= 5 ? btn('📚 Homework <small>⚡</small>', 'kidHw', a('id', p.id), 'small') : '') +
+      btn('👕 Clothes', 'kidClothes', a('id', p.id), 'small' + (k.outgrown ? ' primary' : '')) +
+      (k.bday ? btn('🎂 Birthday', 'kidBday', a('id', p.id), 'small pink') : '') +
+      btn('🩺 Doctor <small>⚡</small>', 'do', a('fn', 'childDoctor') + a('a1', p.id), 'small' + (k.sick ? ' primary' : '')) +
+      btn('🎈 Play <small>⚡</small>', 'kidPlay', a('id', p.id), 'small') +
+      btn('💬 Talk', 'convo', a('id', p.id), 'small primary') +
+      (p.age >= 5 ? btn('🐷 Pocket money', 'do', a('fn', 'pocketMoney') + a('a1', p.id), 'small ghost') : '');
+    return '<div class="person child-card"><div class="child-av">' + BAL.avatar(p.look, p.age, k.happy, { full: true }) + '</div>' +
+      '<div class="grow"><div class="person-name"><b>' + esc(p.name) + '</b> <span class="role">' + (p.gender === 'girl' ? '👧' : '👦') + ' ' + G.relLabel(p) + '</span></div>' +
+      '<div class="muted small">Age ' + p.age + ' · ' + BAL.STAGES[G.stage(p.age)].emoji + ' ' + BAL.STAGES[G.stage(p.age)].name + '</div>' +
+      '<div class="kid-stats"><span>😊</span>' + bar(k.happy, '#FFB703', 'Happiness') + '<span>❤️</span>' + bar(k.health, '#FF5D73', 'Health') + '<span>🧠</span>' + bar(k.smarts, '#7B61FF', 'Smarts') + '<span>💞</span>' + bar(p.close, 'linear-gradient(90deg,#FF8FAB,#FF4D6D)', 'Closeness') + '</div>' +
+      '<div class="needs">' + needs.join('') + '</div><div class="btn-row">' + b + '</div></div></div>';
+  }
+
+  function occasionsCard(l) {
+    var occ = G.occasions(l);
+    if (!occ.length) return '';
+    return '<div class="occasions"><h3 class="sub">🎉 Family occasions this year</h3><div class="occ-grid">' + occ.map(function (o) {
+      var choices = o.child ? btn('🎂 Plan the party', 'kidBday', a('id', o.child), 'small pink')
+        : o.done ? '<span class="tag ok">✓ Celebrated!</span>'
+          : o.levels.map(function (v) { var x = BAL.OCCASION_LEVELS[v], c = G.occasionCost(l, v); return btn(x.emoji + ' ' + x.name + ' <small>' + (c ? '🪙' + fmt(c) : 'free') + '</small>', 'do', a('fn', 'celebrate') + a('a1', o.id) + a('a2', v), 'small'); }).join('');
+      return '<div class="occ' + (o.done ? ' done' : '') + '"><span class="occ-emoji">' + o.emoji + '</span><div class="grow"><b>' + esc(o.name) + '</b><div class="small muted">' + esc(o.desc) + '</div><div class="btn-row">' + choices + '</div></div></div>';
+    }).join('') + '</div></div>';
+  }
+
   function panelPeople(l) {
-    var groups = [
-      ['👪 Family', ['mum', 'dad', 'parent', 'grandma', 'grandpa', 'sibling']],
-      ['💕 Love', ['partner', 'fiance', 'spouse']],
-      ['🧸 Children & Grandchildren', ['child', 'grandchild']],
-      ['🤝 Friends', ['friend']]
-    ];
     var partner = G.partner(l);
+    var kids = G.kidsAtHome(l);
     var top = '<div class="btn-row">';
     if (l.age >= 3) top += btn('🤝 Make a friend <small>⚡1</small>', 'do', a('fn', 'makeFriend'), 'primary');
-    if (l.age >= 18 && !partner) top += btn('💘 Find a sweetheart <small>⚡1</small>', 'findLove', '', 'pink');
-    if (partner && l.age >= 20 && l.age <= 50) top += btn('👶 Have a baby', 'baby', a('kind', 'haveBaby'), 'pink');
+    if (l.age >= 18 && !partner) top += btn('💘 Meet someone special <small>⚡1</small>', 'findLove', '', 'pink');
+    if (partner && (partner.livesWith || partner.role === 'spouse') && l.age >= 20 && l.age <= 50) top += btn('👶 Have a baby', 'baby', a('kind', 'haveBaby'), 'pink');
     if (l.age >= 25 && l.age <= 60) top += btn('🏡 Adopt a child', 'baby', a('kind', 'adoptChild'));
     top += '</div>';
-    var body = groups.map(function (g) {
-      var ps = l.people.filter(function (p) { return g[1].indexOf(p.role) >= 0; });
-      if (!ps.length) return '';
-      return '<h3 class="sub">' + g[0] + '</h3><div class="people-grid">' + ps.map(function (p) { return personCard(l, p); }).join('') + '</div>';
-    }).join('');
+    var sec = function (title, ps, fn) { return ps.length ? '<h3 class="sub">' + title + '</h3><div class="people-grid' + (fn === childCard ? ' kids' : '') + '">' + ps.map(function (p) { return (fn || personCard)(l, p); }).join('') + '</div>' : ''; };
+    var body = '';
+    if (partner) body += '<h3 class="sub">💕 Your love story</h3>' + loveCard(l, partner);
+    body += sec('🧸 Your children', kids, childCard);
+    body += sec('👪 Family', l.people.filter(function (p) { return ['mum', 'dad', 'parent', 'grandma', 'grandpa', 'sibling'].indexOf(p.role) >= 0; }));
+    body += sec('🎓 Grown-up children & grandchildren', l.people.filter(function (p) { return (p.role === 'child' && p.age >= 18) || p.role === 'grandchild'; }));
+    body += sec('🤝 Friends', l.people.filter(function (p) { return p.role === 'friend'; }));
     if (!l.people.length) body = '<div class="big-msg"><span>🌱</span><p>Go and meet some people!</p></div>';
     var rem = l.remembered.filter(function (x) { return x.role !== 'pet'; });
     if (rem.length) body += '<h3 class="sub">🌅 Always in your heart</h3><div class="remember">' + rem.map(function (x) { return '<span>💛 ' + esc(x.name) + ' <small>(' + x.age + ')</small></span>'; }).join('') + '</div>';
-    var tip = l.age < 18 ? '<div class="tip">💡 Spending time with people fills up their heart bar. Sweethearts and weddings are for grown-ups (18+).</div>' : '<div class="tip">💡 Go on dates to fill the love bar above 70, then propose! 💍</div>';
-    return head('❤️', 'Family & Friends', 'The people who make life special.') + energyNote(l) + top + tip + body;
+    var tip = l.age < 18 ? '<div class="tip">💡 Talk to your family and friends, and spend time together to fill their heart bars. Dating and weddings are for grown-ups (18+).</div>'
+      : (kids.length ? '<div class="tip">💡 Children need meals, help with homework, new clothes as they grow, a check-up when they\'re poorly — and lots of time with you!</div>' : '<div class="tip">💡 Love story: go on dates → become boyfriend/girlfriend → move in → get engaged → get married. Buy a home together and start a family!</div>');
+    return head('❤️', 'Family & Friends', 'The people who make life special.') + energyNote(l) + top + tip + occasionsCard(l) + body;
+  }
+
+  /* ---------- family pop-ups ---------- */
+  function convoModal(l, pid) {
+    var cv = G.conversation(l, pid), p = G.person(l, pid);
+    if (!cv) return;
+    var mx = cv.r.map(function (r, i) { return function () { var res = act('reply', pid, i); if (res && res.ok && res.go) { S.tab = res.go; render(); } }; });
+    openModal({ cls: 'chat', title: esc(p.name), emoji: '<span class="chat-av">' + BAL.avatar(p.look, p.age, 85, { bg: '#fff' }) + '</span>',
+      html: '<p class="muted">' + esc(G.relLabel(p)) + '</p><div class="bubble">' + esc(cv.q) + '</div><p class="small muted">What will you say?</p>',
+      buttons: cv.r.map(function (r, i) { return { label: esc(r.t), cls: 'primary', fn: mx[i] }; }).concat([{ label: 'Bye! 👋', cls: 'ghost' }]) });
+  }
+  function kidPicker(l, pid, title, emoji, items, fn) {
+    openModal({ emoji: emoji, title: title, buttons: items.map(function (x) { return { label: x.label, cls: x.cls || 'primary', fn: function () { fn(x.v); } }; }).concat([{ label: 'Not now', cls: 'ghost' }]) });
+  }
+  function kidFeed(l, pid) {
+    var p = G.person(l, pid);
+    kidPicker(l, pid, 'What\'s for dinner, ' + esc(p.name) + '?', '🥣', BAL.MEALS.map(function (m) { var c = G.price(l, m.cost); return { v: m.id, label: m.emoji + ' ' + m.name + ' <small>' + (c ? '🪙' + c : 'free') + '</small>' }; }), function (v) { act('feedChild', pid, v); });
+  }
+  function kidBday(l, pid) {
+    var p = G.person(l, pid);
+    kidPicker(l, pid, 'Happy ' + p.age + 'th birthday, ' + esc(p.name) + '!', '🎂', BAL.CHILD_PARTIES.map(function (x) { var c = G.price(l, x.cost); return { v: x.id, label: x.emoji + ' ' + x.name + ' <small>' + (c ? '🪙' + fmt(c) : 'free') + '</small>', cls: 'pink' }; }), function (v) { act('celebrateChild', pid, v); });
+  }
+  function kidPlay(l, pid) {
+    var p = G.person(l, pid);
+    kidPicker(l, pid, 'What shall we do, ' + esc(p.name) + '?', '🎈', G.kidPlay(p).map(function (x) { return { v: x.id, label: x.emoji + ' ' + x.name }; }), function (v) { act('playWithChild', pid, v); });
+  }
+  function kidClothes(l, pid) {
+    var p = G.person(l, pid), grp = G.ageGroup(p.age);
+    var outfits = G.childOutfits(l, pid);
+    var html = '<p>Pick a new outfit for ' + esc(p.name) + ' (🪙 ' + fmt(G.childClothesCost(l)) + ')</p><div class="outfit-pick">' + outfits.map(function (o, i) {
+      var look = JSON.parse(JSON.stringify(G.normalizeLook(p.look))); look.outfits[grp] = o;
+      return '<button class="outfit" data-mx="' + i + '">' + BAL.avatar(look, p.age, 90, { full: true }) + '</button>';
+    }).join('') + '</div>';
+    openModal({ emoji: '👕', title: 'Shopping for ' + esc(p.name), html: html, buttons: [{ label: 'Not now', cls: 'ghost' }],
+      x: outfits.map(function (o, i) { return function () { act('buyChildClothes', pid, i); }; }) });
+  }
+  function playHomework(l, pid) {
+    var p = G.person(l, pid);
+    var kind = p.age < 8 ? 'maths' : G.pick(['maths', 'spelling', 'facts']);
+    S.game = { hw: pid, c: { emoji: '📝', name: 'Homework with ' + p.name }, type: 'quiz', kind: kind, qi: 0, score: 0, results: [], picked: null, quiz: G.makeQuiz(kind, p.age) };
+    BAL.sound('click');
+    renderMini();
   }
 
   function panelHome(l) {
@@ -705,6 +791,9 @@
       (l.home.type === 'own' ? btn('🪧 Sell home', 'confirm', a('fn', 'sellHome'), 'small ghost') : '') +
       (l.age >= 18 && l.home.type === 'rent' && l.people.some(function (p) { return ['mum', 'dad', 'grandma', 'grandpa'].indexOf(p.role) >= 0; }) ? btn('🏡 Move back with family', 'do', a('fn', 'moveHome'), 'small ghost') : '') +
       '</div></div></div>';
+    var helper = G.homeHelper(l);
+    if (helper && l.home.type !== 'own') out += '<div class="tip">💑 You live with ' + esc(helper.name) + ', so you can buy a home together — ' + esc(helper.name) + ' will pay up to half the first payment (deposit)!</div>';
+    if (l.home.together) { var tg = G.person(l, l.home.together); if (tg) out += '<div class="tip">🏡 You bought this home together with ' + esc(tg.name) + '. 💕</div>'; }
     if (l.age < 18) {
       out += '<div class="tip">🏡 You live with your family. When you\'re 18 you can rent or buy your own home!</div>';
     } else {
@@ -1118,7 +1207,7 @@
     goalFeedback(res.goalsDone);
     var buttons = [];
     var ra = ROLE_ACT[n.role];
-    if (n.mine && n.personId) buttons.push({ label: '💞 Spend time together <small>⚡1</small>', fn: function () { act('spendTime', n.personId); } });
+    if (n.mine && n.personId) { buttons.push({ label: '💬 Have a chat', cls: 'primary', fn: function () { setTimeout(function () { convoModal(l, n.personId); }, 30); } }); buttons.push({ label: '💞 Spend time together <small>⚡1</small>', fn: function () { act('spendTime', n.personId); } }); }
     if (n.befriend && !l.people.some(function (p) { return p.townsId === n.id; }) && l.age >= 3) buttons.push({ label: '🤝 Be friends! <small>⚡1</small>', cls: 'pink', fn: function () { act('befriend', w.loc, n.id); } });
     if (ra && !(ra.needs === 'job' && !l.job) && !(ra.fn === 'study' && !(G.school(l) && G.school(l).kind !== 'nursery'))) {
       buttons.push({ label: ra.label, fn: function () { setTimeout(function () { runPlaceAct(l, ra); }, 30); } });
@@ -1230,7 +1319,7 @@
       body = '<div class="mg-result">' + (passed ? '<div class="mg-big">🌟</div><h3>' + (m.score === m.total ? 'Perfect!' : 'You did it!') + '</h3>' : '<div class="mg-big">💪</div><h3>So close!</h3>') +
         (m.type === 'quiz' ? '<p class="lead">You got <b>' + m.score + ' out of ' + m.total + '</b> right.</p>' : '') +
         '<p>' + esc(m.result.msg) + '</p></div>' +
-        '<div class="modal-btns">' + (passed ? btn('Hooray! 🎉', 'gClose', '', 'primary big') : btn('🔄 Try again', 'gRetry', '', 'primary big') + btn('Later', 'gClose', '', 'ghost big')) + '</div>';
+        '<div class="modal-btns">' + (passed ? btn('Hooray! 🎉', 'gClose', '', 'primary big') : (m.hw ? '' : btn('🔄 Try again', 'gRetry', '', 'primary big')) + btn(m.hw ? 'OK' : 'Later', 'gClose', '', 'ghost big')) + '</div>';
     } else if (m.type === 'quiz') {
       var q = m.quiz[m.qi];
       var dots = m.quiz.map(function (x, k) { var r = m.results[k]; return '<span class="mg-dot' + (r === true ? ' right' : r === false ? ' wrong' : k === m.qi ? ' now' : '') + '"></span>'; }).join('');
@@ -1259,7 +1348,7 @@
   function finishMini() {
     var m = S.game, l = life();
     m.total = m.type === 'quiz' ? m.quiz.length : m.find.targets.length;
-    var res = G.run(l, 'completeGame', m.i, m.score, m.total);
+    var res = m.hw ? G.run(l, 'helpHomework', m.hw, m.score, m.total) : G.run(l, 'completeGame', m.i, m.score, m.total);
     m.result = res;
     save();
     renderMini();
@@ -1269,7 +1358,7 @@
   function miniClick(actName, el) {
     var m = S.game; if (!m) return;
     if (actName === 'gClose') { closeMini(); render(); return; }
-    if (actName === 'gRetry') { var i = m.i; closeMini(); playGame(i); return; }
+    if (actName === 'gRetry') { var i = m.i, hw = m.hw; closeMini(); if (hw) playHomework(life(), hw); else playGame(i); return; }
     if (actName === 'gSpeak') { var q = m.type === 'quiz' && !m.result ? m.quiz[m.qi] : null; speak(q ? q.q + '. ' + q.options.join(', or ') : (m.find && !m.result ? m.find.title : $game.innerText)); return; }
     if (actName === 'gAnswer' && m.picked === null) {
       var q2 = m.quiz[m.qi], v = el.getAttribute('data-v');
@@ -1444,6 +1533,12 @@
       case 'go': if (!S.travelAnim) goTo(l, d('id')); break;
       case 'mode': G.ensureWorld(l).mode = d('id'); save(); BAL.sound('click'); render(); break;
       case 'talk': talkTo(l, d('id')); break;
+      case 'convo': convoModal(l, d('id')); break;
+      case 'kidFeed': kidFeed(l, d('id')); break;
+      case 'kidBday': kidBday(l, d('id')); break;
+      case 'kidPlay': kidPlay(l, d('id')); break;
+      case 'kidClothes': kidClothes(l, d('id')); break;
+      case 'kidHw': if (l.energy < 1) { feedback({ ok: false, msg: 'You are out of energy ⚡! Have a rest first.', emoji: '😴' }); } else playHomework(l, d('id')); break;
       case 'obj': act('useObject', G.ensureWorld(l).loc, d('id')); break;
       case 'goHome': act('goHome'); break;
       case 'placeAct': {
@@ -1538,7 +1633,8 @@
       '<li><span>🏫</span> Go to school, then college or university, then get a job you love.</li>' +
       '<li><span>🪙</span> Earn coins from jobs (you can have up to 3!), side jobs, odd jobs or your own business. Spend them on food, homes, cars, furniture, pets, toys and parties. Coins are pretend — no real money!</li>' +
       '<li><span>🛟</span> Run out of coins? Don\'t panic — the 🪙 Money tab has a rescue plan, and there are always odd jobs to do.</li>' +
-      '<li><span>🐾</span> Adopt pets, make friends, fall in love and build a family.</li>' +
+      '<li><span>🐾</span> Adopt pets and make friends. Grown-ups can date, become a couple, move in, get married, buy a home together and raise children — feed them, help with homework, buy clothes, celebrate their birthdays and take them to the doctor.</li>' +
+      '<li><span>💬</span> Tap <b>Talk</b> on anyone in your family to have a chat and choose what to say.</li>' +
       '<li><span>🗺️</span> Open <b>Explore</b> to travel around your town on the map, chat to people, try things out and take day trips to other towns and islands.</li>' +
       '<li><span>🪞</span> Tap <b>Change Your Look</b> to change clothes, hair and accessories any time — it\'s free!</li>' +
       '<li><span>🧑‍🤝‍🧑</span> Each player can save lots of <b>characters</b>, and every character has their own life.</li>' +

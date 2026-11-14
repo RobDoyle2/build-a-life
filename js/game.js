@@ -238,6 +238,7 @@
 
     if (G.ensureEconomy) G.ensureEconomy(life);
     if (G.ensureWorld) G.ensureWorld(life);
+    if (G.ensureFamily) G.ensureFamily(life);
     resetYear(life);
     addLog(life, age === 0 ? 'Born in ' + G.town(life).name + '! Welcome to the world, ' + life.name + '.' : life.name + ' starts their own story at age ' + age + '.', age === 0 ? '👶' : '🌟');
     return life;

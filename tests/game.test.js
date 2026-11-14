@@ -8,6 +8,7 @@ await import('../js/game.js');
 await import('../js/challenges.js');
 await import('../js/economy.js');
 await import('../js/world.js');
+await import('../js/family.js');
 await import('../js/avatar.js');
 await import('../js/storage.js');
 const BAL = globalThis.BAL;
@@ -101,6 +102,9 @@ test('love, wedding and children', () => {
   assert.equal(G.run(l, 'findLove', 'any').ok, true);
   const p = G.partner(l);
   p.close = 90;
+  assert.equal(G.run(l, 'propose', p.id).ok, false, 'become a couple first');
+  assert.ok(G.run(l, 'askOut', p.id).ok);
+  assert.equal(G.run(l, 'haveBaby', 'Too Soon').ok, false, 'babies come once you live together');
   assert.ok(G.run(l, 'propose', p.id).ok);
   assert.equal(p.role, 'fiance');
   assert.ok(G.run(l, 'wedding', p.id, 'small').ok);
@@ -377,6 +381,11 @@ function solveYear(l) {
       for (const p of m.places) { const ppl = G.placePeople(l, G.currentTown(l), p.id).filter(n => l.world.talked[n.id] !== l.age); if (ppl.length) { if (l.world.loc !== p.id) G.run(l, 'travel', p.id); G.run(l, 'talk', p.id, ppl[0].id); break; } }
       continue;
     }
+    if (acts.includes('reply')) { const fam = l.people.find(p => G.convKind(l, p) !== 'friend' || p.role === 'friend'); assert.ok(fam, 'someone to chat to'); G.run(l, 'reply', fam.id, 0); continue; }
+    if (acts.includes('feedChild')) { const k = G.kidsAtHome(l).find(p => p.kid.meals < 3); assert.ok(G.run(l, 'feedChild', k.id, 'toast').ok); continue; }
+    if (acts.includes('helpHomework')) { const k = G.kidsAtHome(l).find(p => p.age >= 5 && p.kid.hw < 3); G.run(l, 'helpHomework', k.id, 3, 3); continue; }
+    if (acts.includes('celebrateChild')) { const k = G.kidsAtHome(l).find(p => p.kid.bday); assert.ok(G.run(l, 'celebrateChild', k.id, 'cake').ok); continue; }
+    if (acts.includes('celebrate')) { const o = G.occasions(l).find(x => !x.done && !x.child); const free = o.levels.find(v => G.occasionCost(l, v) <= l.coins); assert.ok(free, 'an affordable way to celebrate ' + o.id); G.run(l, 'celebrate', o.id, free); continue; }
     if (acts.includes('oddJob')) { G.run(l, 'oddJob', G.oddJobs(l)[0].id); continue; }
     if (acts.includes('payBack')) { if (!l.coins) G.run(l, 'oddJob', G.oddJobs(l)[0].id); else G.run(l, 'payBack'); continue; }
     if (acts.includes('workHard')) { G.run(l, 'workHard'); continue; }
@@ -744,4 +753,123 @@ test('visiting every place earns the explorer sticker', () => {
   for (const p of G.townMap('sunny').places) if (p.id !== l.world.loc) G.run(l, 'travel', p.id);
   G.run(l, 'travel', 'home');
   assert.ok(l.achievements.includes('explorer'));
+});
+
+/* ---------------- Family & relationships ---------------- */
+
+test('a love story: dating, boyfriend or girlfriend, moving in, engaged, married', () => {
+  lucky();
+  const l = G.newLife({ name: 'Remy', age: 24 });
+  l.coins = 5000;
+  assert.ok(G.run(l, 'findLove', 'girl').ok);
+  const p = G.partner(l);
+  assert.equal(G.relLabel(p), 'Going on dates');
+  assert.equal(G.loveStep(p), 0);
+  p.close = 40;
+  assert.equal(G.run(l, 'askOut', p.id).ok, false, 'get to know each other first');
+  p.close = 80;
+  assert.ok(G.run(l, 'askOut', p.id).ok);
+  assert.equal(G.relLabel(p), 'Girlfriend');
+  assert.ok(G.run(l, 'moveIn', p.id).ok);
+  assert.equal(G.loveStep(p), 2);
+  assert.ok(G.yearlyMoney(l).some(m => /chips in/.test(m.t)), 'a partner you live with helps with bills');
+  assert.ok(G.run(l, 'propose', p.id).ok);
+  assert.ok(G.run(l, 'wedding', p.id, 'small').ok);
+  assert.equal(G.loveStep(p), 4);
+  assert.equal(G.relLabel(p), 'Wife');
+  const kid = G.newLife({ name: 'Kid', age: 15 });
+  assert.equal(G.run(kid, 'findLove').ok, false, 'romance is for grown-ups');
+});
+
+test('buying a home together', () => {
+  lucky();
+  const l = G.newLife({ name: 'Jo', age: 30 });
+  l.people.push(G.makePerson('spouse', 30, 'boy', { name: 'Sam', livesWith: true, savings: 100000 }));
+  const price = G.price(l, G.byId(BAL.HOMES, 'family').price), deposit = Math.round(price * BAL.HOME_DEPOSIT);
+  l.coins = Math.ceil(deposit / 2);
+  const r = G.run(l, 'buyHome', 'family');
+  assert.ok(r.ok, r.msg);
+  assert.match(r.msg, /together/);
+  assert.equal(l.coins, 0);
+  assert.ok(l.achievements.includes('home_together'));
+});
+
+test('raising children: meals, homework, clothes, birthdays, doctor and time together', () => {
+  lucky();
+  const l = G.newLife({ name: 'Mo', age: 30 });
+  l.coins = 2000;
+  l.people.push(G.makePerson('spouse', 30, 'girl', { name: 'Ana', livesWith: true }));
+  assert.ok(G.run(l, 'haveBaby', 'Ollie', 'boy').ok);
+  const o = G.children(l)[0];
+  assert.ok(o.kid, 'the baby has a care record');
+  assert.equal(G.run(l, 'helpHomework', o.id, 3, 3).ok, false, 'babies have no homework');
+  for (let i = 0; i < 6; i++) G.ageUp(l, { force: true });
+  assert.equal(o.age, 6, 'children grow older');
+  assert.ok(o.kid.bday, 'a birthday to celebrate');
+  assert.ok(G.occasions(l).some(x => x.child === o.id));
+  const smart = o.kid.smarts;
+  l.coins = 5000;
+  assert.ok(G.run(l, 'feedChild', o.id, 'healthy').ok);
+  l.energy = 5;
+  assert.ok(G.run(l, 'helpHomework', o.id, 3, 3).ok);
+  assert.ok(o.kid.smarts > smart);
+  assert.ok(G.run(l, 'buyChildClothes', o.id, 1).ok);
+  assert.equal(o.kid.outgrown, false);
+  assert.equal(o.look.outfits[G.ageGroup(6)].top, G.childOutfits(l, o.id).length && o.look.outfits.child.top);
+  const close = o.close;
+  assert.ok(G.run(l, 'celebrateChild', o.id, 'party').ok);
+  assert.ok(o.close > close);
+  assert.equal(G.run(l, 'celebrateChild', o.id, 'party').ok, false, 'one party a year');
+  o.kid.sick = 'a sniffly cold';
+  l.energy = 5;
+  const doc = G.run(l, 'childDoctor', o.id);
+  assert.ok(doc.ok && o.kid.sick === null && doc.coinsDelta === 0, 'free doctor for children');
+  assert.ok(G.kidPlay(o).length >= 3);
+  assert.ok(G.run(l, 'playWithChild', o.id, G.kidPlay(o)[0].id).ok);
+  // never fed? nobody is harmed — just a gentle note
+  const rep = G.ageUp(l, { force: true });
+  assert.ok(rep.notes.some(n => /birthday this year/.test(n.t)));
+  const r2 = G.ageUp(l, { force: true });
+  assert.ok(r2.notes.some(n => /sandwiches/.test(n.t)));
+  // grow up
+  for (let i = 0; i < 12; i++) G.ageUp(l, { force: true });
+  assert.ok(o.age >= 18 && !o.kid && o.grownJob);
+  assert.ok(l.achievements.includes('raised'));
+});
+
+test('family occasions always have a free way to celebrate', () => {
+  lucky();
+  const l = G.newLife({ name: 'Bea', age: 40 });
+  l.coins = 0;
+  l.people.push(G.makePerson('spouse', 40, 'boy', { name: 'Bo' }));
+  l.flags.weddingAge = 35;
+  const occ = G.occasions(l);
+  assert.ok(occ.some(o => o.id === 'anniv') && occ.some(o => o.id === 'dayout') && occ.some(o => o.id === 'winter'));
+  for (const o of occ.filter(x => !x.child)) {
+    const free = o.levels.find(v => G.occasionCost(l, v) === 0);
+    assert.ok(free, o.id);
+    assert.ok(G.run(l, 'celebrate', o.id, free).ok);
+  }
+  assert.ok(G.occasions(l).filter(x => !x.child).every(o => o.done));
+  const kid = G.newLife({ name: 'Ty', age: 8 });
+  assert.ok(G.occasions(kid).some(o => o.kid), 'children can make cards for family birthdays');
+});
+
+test('family conversations are two-way and suitable for children', () => {
+  lucky();
+  const kid = G.newLife({ name: 'Lu', age: 8 });
+  const mum = kid.people.find(p => ['mum', 'dad', 'parent'].includes(p.role));
+  const cv = G.conversation(kid, mum.id);
+  assert.ok(cv.q && cv.r.length >= 2);
+  const c = mum.close;
+  assert.ok(G.run(kid, 'reply', mum.id, 0).ok);
+  assert.ok(mum.close >= c);
+  const banned = /\b(kiss\w*|sexy|beer|wine|drunk|alcohol|gambl\w*|bet|hate|stupid|shut up)\b/i;
+  for (const [kind, list] of Object.entries(BAL.CONVERSATIONS)) {
+    assert.ok(list.length >= 2, kind);
+    for (const c2 of list) {
+      assert.doesNotMatch(c2.q, banned, kind);
+      for (const r of c2.r) { assert.doesNotMatch(r.t + ' ' + r.m, banned, kind); }
+    }
+  }
 });
