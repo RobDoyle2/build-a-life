@@ -100,7 +100,14 @@
       obj: [{ id: 'kennel', emoji: '🐶', name: 'Dog Kennels', msg: 'A puppy licked your hand! So cute!', fx: { happy: 3 } }, { id: 'catroom', emoji: '🐱', name: 'Cat Room', msg: 'A kitten purred on your lap.', fx: { happy: 3 } },
         { id: 'donate', emoji: '🦴', name: 'Donation Box', msg: 'You donated some coins for pet food. Thank you!', fx: { happy: 3 }, coins: -10, kind: true }],
       npc: [{ role: 'shelter', title: 'Shelter Worker', emoji: '🐾', lines: ['Every animal here needs a loving home.', 'Pets need food, walks and cuddles every day!', 'Would you like to meet the rabbits?'] }],
-      acts: [{ label: '🏡 Adopt a pet', tab: 'pets' }, { label: '🤝 Volunteer', activity: ['volunteer'] }] },
+      acts: [{ label: '🏡 Meet the animals', tab: 'pets' }, { label: '🧸 Pet shop', tab: 'pets' }, { label: '🤝 Volunteer', activity: ['volunteer'] }] },
+    { id: 'vet', name: 'Vet\'s Surgery', emoji: '🐕', color: '#E6FCF5', desc: 'Check-ups, vaccinations and cuddles for poorly pets.',
+      obj: [{ id: 'scales', emoji: '⚖️', name: 'Pet Scales', msg: 'You stood on the pet scales. "Hmm, that\'s a very big hamster!" said the vet.', fx: { happy: 2 } },
+        { id: 'poster', emoji: '🪧', name: 'Pet Care Poster', msg: 'You read that rabbits need hay every day. Good to know!', fx: { smarts: 1 } },
+        { id: 'waiting', emoji: '🐶', name: 'Waiting Room Pets', msg: 'A sleepy spaniel put its head on your knee.', fx: { happy: 2 } }],
+      npc: [{ role: 'vet', title: 'Vet', emoji: '🩺', lines: ['Pets need clean water every day!', 'How are your pets doing?', 'Remember a yearly check-up!'] },
+        { role: 'vetnurse', title: 'Veterinary Nurse', emoji: '🐾', lines: ['Who\'s a brave little patient?', 'We\'ve got treats for good pets!', 'Wash your hands after cuddling animals!'] }],
+      acts: [{ label: '🐾 Take a pet to the vet', tab: 'pets' }] },
     { id: 'work', name: 'Workplace', emoji: '🏢', color: '#E5DBFF', desc: 'Offices, workshops and the Job Centre.',
       obj: [{ id: 'coffee', emoji: '☕', name: 'Coffee Machine', msg: 'Whirr… bzzz… coffee break!', fx: { happy: 1 } }, { id: 'noticeboard', emoji: '📌', name: 'Notice Board', msg: 'Lots of jobs advertised today!', fx: { smarts: 1 } },
         { id: 'printer', emoji: '🖨️', name: 'Printer', msg: 'It printed 100 pages of cat pictures. Oops!', fx: { happy: 2 } }],
@@ -158,7 +165,7 @@
   G.place = function (id) { return byId(BAL.PLACES, id); };
 
   // Which places each kind of town has. Every town has all the essentials.
-  var ESSENTIALS = ['home', 'school', 'surgery', 'hospital', 'shops', 'supermarket', 'park', 'cafe', 'restaurant', 'shelter', 'work', 'salon', 'library'];
+  var ESSENTIALS = ['home', 'school', 'surgery', 'hospital', 'shops', 'supermarket', 'park', 'cafe', 'restaurant', 'shelter', 'vet', 'work', 'salon', 'library'];
   var EXTRAS = {
     town: ['station'], village: ['station'], city: ['station', 'museum', 'cinema'],
     seaside: ['station', 'harbour', 'beach'], island: ['harbour', 'beach', 'lighthouse']

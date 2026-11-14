@@ -9,6 +9,7 @@ await import('../js/challenges.js');
 await import('../js/economy.js');
 await import('../js/world.js');
 await import('../js/family.js');
+await import('../js/pets.js');
 await import('../js/avatar.js');
 await import('../js/storage.js');
 const BAL = globalThis.BAL;
@@ -386,6 +387,7 @@ function solveYear(l) {
     if (acts.includes('helpHomework')) { const k = G.kidsAtHome(l).find(p => p.age >= 5 && p.kid.hw < 3); G.run(l, 'helpHomework', k.id, 3, 3); continue; }
     if (acts.includes('celebrateChild')) { const k = G.kidsAtHome(l).find(p => p.kid.bday); assert.ok(G.run(l, 'celebrateChild', k.id, 'cake').ok); continue; }
     if (acts.includes('celebrate')) { const o = G.occasions(l).find(x => !x.done && !x.child); const free = o.levels.find(v => G.occasionCost(l, v) <= l.coins); assert.ok(free, 'an affordable way to celebrate ' + o.id); G.run(l, 'celebrate', o.id, free); continue; }
+    if (acts.includes('feedPet')) { G.run(l, 'feedPet', l.pets[0].id, 'basic'); G.run(l, 'washPet', l.pets[0].id); l.pets[0].full = 0; l.pets[0].clean = 0; continue; }
     if (acts.includes('oddJob')) { G.run(l, 'oddJob', G.oddJobs(l)[0].id); continue; }
     if (acts.includes('payBack')) { if (!l.coins) G.run(l, 'oddJob', G.oddJobs(l)[0].id); else G.run(l, 'payBack'); continue; }
     if (acts.includes('workHard')) { G.run(l, 'workHard'); continue; }
@@ -872,4 +874,116 @@ test('family conversations are two-way and suitable for children', () => {
       for (const r of c2.r) { assert.doesNotMatch(r.t + ' ' + r.m, banned, kind); }
     }
   }
+});
+
+/* ---------------- Pets & the animal shelter ---------------- */
+
+test('the shelter has dogs, cats, hamsters, rabbits, guinea pigs and other small pets', () => {
+  lucky();
+  const l = G.newLife({ name: 'Pip', age: 10 });
+  const kinds = new Set(G.shelter(l).map(a => a.kind));
+  for (const k of ['dog', 'cat', 'hamster', 'rabbit', 'guinea']) assert.ok(kinds.has(k), k);
+  assert.ok(G.shelter(l).some(a => ['mouse', 'chinchilla'].includes(a.kind)), 'another small pet');
+  assert.deepEqual(G.shelter(l).map(a => a.id), G.shelter(l).map(a => a.id), 'the shelter stays the same all year');
+  for (const a of G.shelter(l)) assert.ok(a.name && a.breed && a.personality && a.look);
+});
+
+test('adopting with coins: choose the name and the look', () => {
+  lucky();
+  const l = G.newLife({ name: 'Ada', age: 12 });
+  const dog = G.shelter(l).find(a => a.kind === 'dog');
+  l.coins = 0;
+  assert.equal(G.run(l, 'adoptFromShelter', dog.id, 'Rex', null, 'coins').ok, false, 'need enough coins');
+  l.coins = 500;
+  const look = { color: '#3B2F2F', color2: '#FFFFFF', pattern: 'spots', eyes: '#3A86FF', acc: 'bandana', accColor: '#69DB7C', evil: 'x' };
+  const r = G.run(l, 'adoptFromShelter', dog.id, 'Rex', look, 'coins');
+  assert.ok(r.ok, r.msg);
+  assert.equal(l.coins, 500 - G.adoptionFee(l, 'dog'));
+  const p = l.pets[0];
+  assert.equal(p.name, 'Rex');
+  assert.deepEqual(p.look, { color: '#3B2F2F', color2: '#FFFFFF', pattern: 'spots', eyes: '#3A86FF', acc: 'bandana', accColor: '#69DB7C' });
+  assert.ok(!G.shelter(l).some(a => a.id === dog.id), 'adopted animals leave the shelter');
+  const kid = G.newLife({ name: 'Tiny', age: 4 });
+  kid.coins = 999;
+  assert.equal(G.run(kid, 'adoptFromShelter', G.shelter(kid)[0].id, 'X', null, 'coins').ok, false, 'from age 5');
+});
+
+test('children can ask their family once a year instead of paying', () => {
+  lucky();
+  const l = G.newLife({ name: 'Kai', age: 9 });
+  l.coins = 0;
+  const cat = G.shelter(l).find(a => a.kind === 'cat');
+  assert.ok(G.run(l, 'adoptFromShelter', cat.id, 'Tom', null, 'ask').ok);
+  assert.equal(l.coins, 0);
+  const ham = G.shelter(l).find(a => a.kind === 'hamster');
+  assert.equal(G.run(l, 'adoptFromShelter', ham.id, 'Nibbles', null, 'ask').ok, false, 'once a year');
+});
+
+test('feeding, washing, playing, toys, beds and the vet', () => {
+  lucky();
+  const l = G.newLife({ name: 'Vi', age: 30 });
+  l.coins = 2000;
+  const bun = G.shelter(l).find(a => a.kind === 'rabbit');
+  G.run(l, 'adoptFromShelter', bun.id, 'Flopsy', null, 'coins');
+  const p = l.pets[0];
+  p.full = 10; p.clean = 10; p.love = 40; p.health = 50;
+  assert.ok(G.run(l, 'feedPet', p.id, 'basic').ok);
+  assert.ok(p.full > 10, 'fuller');
+  const c = l.coins;
+  assert.ok(G.run(l, 'feedPet', p.id, 'tasty').ok);
+  assert.ok(l.coins < c, 'tasty food costs coins');
+  assert.ok(G.run(l, 'washPet', p.id).ok);
+  assert.equal(p.clean, 100);
+  const love = p.love;
+  l.energy = 5;
+  assert.ok(G.run(l, 'playPet', p.id).ok);
+  assert.ok(p.love > love);
+  assert.ok(G.petToys('rabbit').length >= 3 && G.petBeds('rabbit').length >= 1);
+  assert.equal(G.run(l, 'buyPetToy', p.id, 'frisbee').ok, false, 'rabbits do not play frisbee');
+  assert.ok(G.run(l, 'buyPetToy', p.id, 'carrot').ok);
+  assert.equal(G.run(l, 'buyPetToy', p.id, 'carrot').ok, false);
+  assert.ok(G.run(l, 'buyPetBed', p.id, 'hutch').ok);
+  assert.equal(p.bed, 'hutch');
+  p.sick = 'a sore paw';
+  l.energy = 5;
+  const v = G.run(l, 'vet', p.id);
+  assert.ok(v.ok && p.sick === null && v.coinsDelta < 0);
+  assert.ok(G.run(l, 'stylePet', p.id, 'bow', '#FF6B6B').ok);
+  assert.equal(p.look.acc, 'bow');
+  assert.ok(G.run(l, 'patPet', p.id).ok);
+});
+
+test('pets have happiness and health that change over the years, but are never harmed', () => {
+  lucky();
+  const l = G.newLife({ name: 'Ed', age: 30 });
+  l.coins = 1000;
+  G.run(l, 'adoptFromShelter', G.shelter(l).find(a => a.kind === 'dog').id, 'Biscuit', null, 'coins');
+  const p = l.pets[0];
+  p.full = 0; p.clean = 0;
+  const rep = G.ageUp(l, { force: true });
+  assert.ok(rep.notes.some(n => /hungry/.test(n.t)) && rep.notes.some(n => /wash/.test(n.t)));
+  for (let i = 0; i < 5; i++) { p.full = 0; p.clean = 0; G.ageUp(l, { force: true }); }
+  assert.ok(p.health >= 5, 'pets never get seriously ill from a missed meal');
+  // old saves: a pet with only "love" gets the new fields
+  const old = { id: 'abcdef', kind: 'cat', name: 'Old Tom', age: 3, love: 60 };
+  G.ensurePet(old);
+  assert.ok(old.health && old.full !== undefined && old.look && old.personality && Array.isArray(old.toys));
+});
+
+test('every pet and look draws properly', () => {
+  for (const sp of BAL.PETS) {
+    for (let i = 0; i < 6; i++) {
+      G.rng = Math.random;
+      const look = G.randomPetLook(sp.id);
+      look.acc = BAL.PET_ACCS[i % BAL.PET_ACCS.length].id;
+      look.pattern = BAL.PET_PATTERNS[i % BAL.PET_PATTERNS.length].id;
+      const svg = BAL.petAvatar(sp.id, look, i * 20);
+      assert.match(svg, /^<svg[\s\S]*<\/svg>$/);
+      assert.doesNotMatch(svg, /NaN|undefined/, sp.id);
+    }
+  }
+});
+
+test('every town has a vet', () => {
+  for (const t of BAL.TOWNS) assert.ok(G.townMap(t.id).places.some(p => p.id === 'vet'), t.id);
 });

@@ -39,6 +39,7 @@
           if (BAL.Game && BAL.Game.ensureEconomy) BAL.Game.ensureEconomy(l);
           if (BAL.Game && BAL.Game.ensureWorld) BAL.Game.ensureWorld(l);
           if (BAL.Game && BAL.Game.ensureFamily) BAL.Game.ensureFamily(l);
+          if (BAL.Game && BAL.Game.ensurePets) BAL.Game.ensurePets(l);
           if (BAL.Game && BAL.Game.ensureGoals) BAL.Game.ensureGoals(l);
         });
       });

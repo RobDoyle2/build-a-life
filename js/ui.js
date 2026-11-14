@@ -820,28 +820,106 @@
     return out;
   }
 
-  function panelPets(l) {
-    var out = head('🐾', 'Pets', 'Love them, play with them and they\'ll make you happy!') + energyNote(l);
-    if (l.pets.length) {
-      out += '<h3 class="sub">💛 Your pets</h3><div class="people-grid">' + l.pets.map(function (p) {
-        var k = byId(BAL.PETS, p.kind);
-        return '<div class="person pet"><div class="pet-av wiggle">' + k.emoji + '</div><div class="grow"><div class="person-name"><b>' + esc(p.name) + '</b> <span class="role">' + k.name + '</span></div><div class="muted small">Age ' + p.age + '</div>' +
-          hearts(p.love) + '<div class="btn-row">' + btn('🎾 Play <small>⚡</small>', 'do', a('fn', 'playPet') + a('a1', p.id), 'small primary') + btn('🦴 Treat <small>🪙10</small>', 'do', a('fn', 'petTreat') + a('a1', p.id), 'small') +
-          btn('🌾', 'confirm', a('fn', 'rehomePet') + a('a1', p.id) + ' title="Find a new home" aria-label="Find ' + esc(p.name) + ' a new home"', 'small ghost') + '</div></div></div>';
-      }).join('') + '</div>';
-    } else out += '<div class="big-msg"><span>🏠</span><p>No pets yet. Visit the animal shelter below!</p></div>';
+  function petBars(p) {
+    return '<div class="pet-bars"><span title="Happiness">😊</span>' + bar(p.love, '#FFB703', 'Happiness') + '<span title="Health">❤️</span>' + bar(p.health, '#FF5D73', 'Health') +
+      '<span title="Tummy">🥣</span>' + bar(p.full, '#69DB7C', 'Fullness') + '<span title="Clean">🛁</span>' + bar(p.clean, '#4DABF7', 'Cleanliness') + '</div>';
+  }
+  function petCard(l, p) {
+    G.ensurePet(p);
+    var sp = byId(BAL.PETS, p.kind), bed = byId(BAL.PET_BEDS, p.bed);
+    var badges = [];
+    if (p.sick) badges.push('<span class="need warn">🤒 Has ' + esc(p.sick) + '</span>');
+    if (p.full < 30) badges.push('<span class="need warn">🥣 Hungry!</span>');
+    if (p.clean < 30) badges.push('<span class="need warn">🛁 Needs a wash</span>');
+    if (bed) badges.push('<span class="need ok">' + bed.emoji + ' ' + esc(bed.name) + '</span>');
+    if (p.toys.length) badges.push('<span class="need ok">🧸 ' + p.toys.map(function (t) { return (byId(BAL.PET_TOYS, t) || {}).emoji; }).join('') + '</span>');
+    return '<div class="pet-card"><button class="pet-big" data-act="petPat"' + a('id', p.id) + ' aria-label="Pat ' + esc(p.name) + '">' + BAL.petAvatar(p.kind, p.look, p.love, { label: p.name }) + '</button>' +
+      '<div class="grow"><div class="person-name"><b>' + esc(p.name) + '</b> <span class="role">' + sp.emoji + ' ' + esc(p.breed) + '</span></div>' +
+      '<div class="muted small">' + G.petAgeLabel(p.kind, p.age) + ' · ' + esc(p.personality) + ' · tap to pat!</div>' + petBars(p) +
+      (badges.length ? '<div class="needs">' + badges.join('') + '</div>' : '') +
+      '<div class="btn-row">' + btn('🥣 Feed', 'petFeed', a('id', p.id), 'small' + (p.full < 30 ? ' primary' : '')) + btn('🛁 Wash', 'do', a('fn', 'washPet') + a('a1', p.id), 'small' + (p.clean < 30 ? ' primary' : '')) +
+      btn('🎾 Play <small>⚡</small>', 'do', a('fn', 'playPet') + a('a1', p.id), 'small primary') + btn('🩺 Vet <small>⚡' + (G.vetCost(l) ? ' 🪙' + fmt(G.vetCost(l)) : '') + '</small>', 'do', a('fn', 'vet') + a('a1', p.id), 'small' + (p.sick ? ' pink' : '')) +
+      btn('🧸 Toys & bed', 'petShop', a('id', p.id), 'small') + btn('🎀 Style', 'petStyle', a('id', p.id), 'small') +
+      btn('🌾', 'confirm', a('fn', 'rehomePet') + a('a1', p.id) + ' title="Find a new home" aria-label="Find ' + esc(p.name) + ' a new home"', 'small ghost') + '</div></div></div>';
+  }
+
+  function adoptionRoom(l) {
+    var ad = S.adopt, an = ad.animal, sp = byId(BAL.PETS, an.kind), inf = G.petInfo(an.kind), lk = ad.look;
+    var fee = G.adoptionFee(l, an.kind);
+    function sw(k, list) { return '<div class="pick-row">' + list.map(function (c) { return '<button class="pick swatch' + (lk[k] === c ? ' on' : '') + '" data-act="adoptLook"' + a('k', k) + a('v', c) + ' style="background:' + c + '" aria-label="' + k + ' ' + c + '"></button>'; }).join('') + '</div>'; }
+    var opts;
+    if (inf.draw) {
+      opts = '<h4>🎨 Fur colour</h4>' + sw('color', inf.colors) +
+        '<h4>🐾 Markings</h4><div class="pick-row">' + BAL.PET_PATTERNS.map(function (pt) { return '<button class="pick chip small' + (lk.pattern === pt.id ? ' on' : '') + '" data-act="adoptLook"' + a('k', 'pattern') + a('v', pt.id) + '>' + pt.name + '</button>'; }).join('') + '</div>' +
+        (lk.pattern !== 'plain' ? '<h4>🎨 Markings colour</h4>' + sw('color2', inf.colors.concat(['#FFFFFF']).filter(function (c, i, arr) { return arr.indexOf(c) === i; })) : '') +
+        '<h4>👀 Eyes</h4>' + sw('eyes', BAL.PET_EYES);
+    } else {
+      opts = '<h4>🎨 Colour</h4><div class="pick-row">' + BAL.PET_HUES.map(function (h) { return '<button class="pick hue' + (+lk.hue === h ? ' on' : '') + '" data-act="adoptLook"' + a('k', 'hue') + a('v', h) + '>' + BAL.petAvatar(an.kind, { hue: h }, 80) + '</button>'; }).join('') + '</div>';
+    }
+    opts += '<h4>🎀 Accessory</h4><div class="pick-row">' + BAL.PET_ACCS.map(function (x) { return '<button class="pick chip small' + (lk.acc === x.id ? ' on' : '') + '" data-act="adoptLook"' + a('k', 'acc') + a('v', x.id) + '>' + x.emoji + ' ' + x.name + '</button>'; }).join('') + '</div>' +
+      (lk.acc !== 'none' ? sw('accColor', BAL.PET_ACC_COLORS) : '');
     var kid = l.age < 18;
-    out += '<h3 class="sub">🏡 Animal Shelter ' + (kid ? '<small>(ask your family — once a year!)</small>' : '<small>(adoption fee + yearly food & vet costs)</small>') + '</h3>';
-    if (l.age < 5) out += '<div class="tip">🍼 You can ask for a pet when you\'re 5!</div>';
-    out += '<div class="mini-grid">' + BAL.PETS.map(function (k) {
-      return '<div class="mini-card"><span class="mini-emoji wiggle-h">' + k.emoji + '</span><b>' + k.name + '</b>' +
-        (kid ? '' : '<span>🪙 ' + fmt(G.price(l, k.fee)) + '</span><small>Food: 🪙 ' + fmt(G.price(l, k.cost)) + '/yr</small>') +
-        btn(kid ? 'Ask family 🙏' : 'Adopt', 'adoptPet', a('kind', k.id), 'small' + (kid && l.flags.askedPet ? ' ghost' : ' primary')) + '</div>';
-    }).join('') + '</div>';
+    var buttons = btn('💕 Adopt for 🪙 ' + fmt(fee), 'adoptGo', a('how', 'coins'), 'big ' + (l.coins >= fee ? 'pink' : 'ghost')) +
+      (kid ? btn('🙏 Ask my family' + (l.flags.askedPet ? ' (asked this year)' : ''), 'adoptGo', a('how', 'ask'), 'big' + (l.flags.askedPet ? ' ghost' : ' primary')) : '');
+    return head('🏡', 'Adoption Room', 'Getting to know this ' + esc(an.breed.toLowerCase()) + ' — give them a name and choose their look!') +
+      '<div class="adopt">' +
+      '<div class="adopt-preview card"><div class="adopt-av bob">' + BAL.petAvatar(an.kind, lk, 90, { label: 'Your new pet' }) + '</div>' +
+      '<div class="preview-name" id="petpv">' + esc(ad.name || '…') + '</div><div class="muted center">' + sp.emoji + ' ' + esc(an.breed) + ' · ' + G.petAgeLabel(an.kind, an.age) + ' · ' + esc(an.personality) + '</div>' +
+      '<div class="bubble small-bubble">' + esc(inf.sound) + '</div>' +
+      '<p class="small muted center">Food & vet bills: about 🪙 ' + fmt(G.price(l, sp.cost)) + ' a year' + (kid ? ' (your family pays while you\'re young)' : '') + '. Pets live for about ' + sp.life + ' years.</p></div>' +
+      '<div class="adopt-opts"><section class="card opt"><h3>📛 Name</h3><div class="name-row"><input id="petname" maxlength="20" value="' + esc(ad.name) + '" aria-label="Pet name" autocomplete="off"><button class="btn" data-act="adoptName" aria-label="Random name">🎲</button></div></section>' +
+      '<section class="card opt"><h3>✨ Choose their look</h3>' + opts + '</section>' +
+      '<div class="btn-row">' + buttons + btn('⬅ Back to the shelter', 'adoptCancel', '', 'ghost') + '</div></div></div>';
+  }
+
+  function petShopView(l) {
+    var p = byId(l.pets, S.petShop); if (!p) { S.petShop = null; return panelPets(l); }
+    var toys = G.petToys(p.kind), beds = G.petBeds(p.kind);
+    var card = function (x, owned, fn) { var c = G.petPrice(l, x.cost); return '<div class="shop-card' + (owned ? ' owned' : '') + '"><span class="shop-emoji">' + x.emoji + '</span><b>' + esc(x.name) + '</b>' + (owned ? '<span class="tag ok">✓ ' + (fn === 'buyPetBed' ? 'In use' : 'Owned') + '</span>' : btn('🪙 ' + fmt(c), 'do', a('fn', fn) + a('a1', p.id) + a('a2', x.id), 'small' + (l.coins >= c ? ' primary' : ' ghost'))) + '</div>'; };
+    return head('🧸', 'Pet Shop', 'Treats for ' + esc(p.name) + '! You have 🪙 ' + fmt(l.coins) + '.') +
+      '<div class="info-card"><span class="pet-mini">' + BAL.petAvatar(p.kind, p.look, p.love) + '</span><div class="grow"><b>' + esc(p.name) + '</b><div class="small muted">Toys make play time more fun and add happiness every year. A good bed adds health and happiness every year.</div></div>' + btn('⬅ Back to my pets', 'petShopClose', '', 'ghost') + '</div>' +
+      '<h3 class="sub">🧸 Toys</h3><div class="shop-grid">' + toys.map(function (t) { return card(t, p.toys.indexOf(t.id) >= 0, 'buyPetToy'); }).join('') + '</div>' +
+      '<h3 class="sub">🛏️ Beds & homes</h3><div class="shop-grid">' + beds.map(function (b) { return card(b, p.bed === b.id, 'buyPetBed'); }).join('') + '</div>';
+  }
+
+  function panelPets(l) {
+    if (S.adopt) return adoptionRoom(l);
+    if (S.petShop) return petShopView(l);
+    var out = head('🐾', 'Pets', 'Love them, feed them, wash them and play with them!') + energyNote(l);
+    if (l.pets.length) out += '<h3 class="sub">💛 Your pets <small>(' + l.pets.length + ' / ' + BAL.MAX_PETS + ')</small></h3><div class="pets-grid">' + l.pets.map(function (p) { return petCard(l, p); }).join('') + '</div>';
+    else out += '<div class="big-msg"><span>🏠</span><p>No pets yet. Meet the animals at the shelter below!</p></div>';
+    var kid = l.age < 18;
+    var shelter = G.shelter(l);
+    out += '<h3 class="sub">🏡 ' + esc(G.town(l).name) + ' Animal Shelter <small>(' + (kid ? 'adopt with your own coins, or ask your family once a year' : 'adoption fee + yearly food & vet bills') + ' · new animals arrive every year)</small></h3>';
+    if (l.age < 5) out += '<div class="tip">🍼 You can adopt a pet when you\'re 5!</div>';
+    out += '<div class="shelter-grid">' + shelter.map(function (an) {
+      var sp = byId(BAL.PETS, an.kind);
+      return '<button class="shelter-card" data-act="meet"' + a('id', an.id) + '><span class="shelter-av">' + BAL.petAvatar(an.kind, an.look, 80) + '</span><b>' + esc(an.name) + '</b>' +
+        '<small>' + sp.emoji + ' ' + esc(an.breed) + '</small><small>' + G.petAgeLabel(an.kind, an.age) + ' · ' + esc(an.personality) + '</small><span class="price">🪙 ' + fmt(G.adoptionFee(l, an.kind)) + '</span><span class="btn small primary">Meet me!</span></button>';
+    }).join('') + (shelter.length ? '' : '<div class="tip">Every animal has found a home this year! 🎉 Come back next year.</div>') + '</div>';
     var rem = l.remembered.filter(function (x) { return x.role === 'pet'; });
     if (rem.length) out += '<h3 class="sub">🌈 Rainbow Bridge friends</h3><div class="remember">' + rem.map(function (x) { var k = byId(BAL.PETS, x.kind); return '<span>' + (k ? k.emoji : '🐾') + ' ' + esc(x.name) + '</span>'; }).join('') + '</div>';
     return out;
   }
+
+  function petFeedModal(l, id) {
+    var p = byId(l.pets, id);
+    openModal({ emoji: '🥣', title: 'Dinner time, ' + esc(p.name) + '!', buttons: G.petFoods(p.kind).map(function (f) {
+      var c = f.cost && l.age >= 16 ? G.price(l, f.cost) : f.cost;
+      return { label: f.emoji + ' ' + esc(f.name) + ' <small>' + (c ? '🪙' + c : 'free') + '</small>', cls: 'primary', fn: function () { act('feedPet', id, f.id); } };
+    }).concat([{ label: 'Not now', cls: 'ghost' }]) });
+  }
+  function petStyleModal(l, id) {
+    var p = byId(l.pets, id);
+    var html = '<div class="pet-style">' + BAL.PET_ACCS.map(function (x, i) {
+      var look = Object.assign({}, p.look, { acc: x.id });
+      return '<button class="outfit pet-opt" data-mx="' + i + '">' + BAL.petAvatar(p.kind, look, 90) + '<small>' + x.emoji + ' ' + x.name + '</small></button>';
+    }).join('') + '</div>';
+    openModal({ emoji: '🎀', title: 'Style ' + esc(p.name), html: '<p>Pick an accessory — it\'s free!</p>' + html, buttons: [{ label: 'Done', cls: 'ghost' }],
+      x: BAL.PET_ACCS.map(function (x) { return function () { act('stylePet', id, x.id, G.pick(BAL.PET_ACC_COLORS)); }; }) });
+  }
+
+
 
   function shopIntro(l) {
     switch (S.shopCat) {
@@ -1099,7 +1177,7 @@
     adviser: { label: '🏢 Look for a job', tab: 'school' }, boss: { label: '💪 Work hard', fn: 'workHard', needs: 'job' },
     teacher: { label: '📚 Study hard', fn: 'study' }, librarian: { label: '🛠️ Learn a skill', tab: 'school' },
     guard: { label: '🎫 Buy a ticket', trips: true }, captain: { label: '🎫 Buy a ferry ticket', trips: true },
-    waiter: { label: '🍝 Order a meal', fn: 'mealOut' }, lifeguard: { label: '🏊 Go swimming', activity: ['swim'] }
+    waiter: { label: '🍝 Order a meal', fn: 'mealOut' }, vet: { label: '🐾 Book a pet check-up', tab: 'pets' }, vetnurse: { label: '🐾 Book a pet check-up', tab: 'pets' }, lifeguard: { label: '🏊 Go swimming', activity: ['swim'] }
   };
 
   function placeAct(l, x) {
@@ -1527,13 +1605,38 @@
       case 'edSave': edSave(); break;
       case 'townType': S.townType = d('v'); BAL.sound('click'); render(); break;
       case 'edCancel': S.ed = null; S.screen = 'game'; BAL.sound('click'); render(); break;
-      case 'tab': S.tab = d('id'); BAL.sound('click'); render(); var pn = document.getElementById('panel'); if (pn && window.innerWidth < 900) pn.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' }); break;
+      case 'tab': S.adopt = null; S.petShop = null; S.tab = d('id'); BAL.sound('click'); render(); var pn = document.getElementById('panel'); if (pn && window.innerWidth < 900) pn.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' }); break;
       case 'shopCat': S.shopCat = d('id'); BAL.sound('click'); render(); break;
       case 'ageUp': ageUp(); break;
       case 'go': if (!S.travelAnim) goTo(l, d('id')); break;
       case 'mode': G.ensureWorld(l).mode = d('id'); save(); BAL.sound('click'); render(); break;
       case 'talk': talkTo(l, d('id')); break;
       case 'convo': convoModal(l, d('id')); break;
+      case 'meet': {
+        var an = G.shelter(l).find(function (x) { return x.id === d('id'); });
+        if (an) { S.adopt = { animal: an, look: JSON.parse(JSON.stringify(an.look)), name: an.name }; BAL.sound('good'); render(); var pp = document.getElementById('panel'); if (pp) pp.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' }); }
+        break;
+      }
+      case 'adoptLook': { var lk = S.adopt.look; lk[d('k')] = d('k') === 'hue' ? +d('v') : d('v'); BAL.sound('click'); render(); break; }
+      case 'adoptName': S.adopt.name = G.pick(BAL.NAMES.pets); BAL.sound('click'); render(); break;
+      case 'adoptCancel': S.adopt = null; BAL.sound('click'); render(); break;
+      case 'adoptGo': {
+        var ad = S.adopt;
+        var res = G.run(l, 'adoptFromShelter', ad.animal.id, ad.name, ad.look, d('how'));
+        if (res.ok) S.adopt = null;
+        feedback(res);
+        break;
+      }
+      case 'petPat': {
+        var pr = G.run(l, 'patPet', d('id'));
+        var pb = el; pb.classList.remove('patted'); void pb.offsetWidth; pb.classList.add('patted');
+        BAL.sound('good'); toast(pr.msg, pr.emoji, 'good', pr.diffs); save();
+        break;
+      }
+      case 'petFeed': petFeedModal(l, d('id')); break;
+      case 'petStyle': petStyleModal(l, d('id')); break;
+      case 'petShop': S.petShop = d('id'); BAL.sound('click'); render(); break;
+      case 'petShopClose': S.petShop = null; BAL.sound('click'); render(); break;
       case 'kidFeed': kidFeed(l, d('id')); break;
       case 'kidBday': kidBday(l, d('id')); break;
       case 'kidPlay': kidPlay(l, d('id')); break;
@@ -1644,6 +1747,7 @@
   }
 
   function onInput(e) {
+    if (e.target.id === 'petname' && S.adopt) { S.adopt.name = e.target.value; var pv2 = document.getElementById('petpv'); if (pv2) pv2.textContent = e.target.value || '…'; return; }
     if (e.target.id === 'cname' && S.ed) {
       S.ed.name = e.target.value;
       var pv = document.getElementById('pvname'); if (pv) pv.textContent = e.target.value || '…';
