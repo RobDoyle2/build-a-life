@@ -49,7 +49,8 @@
   function headFront(s, look, group, cx, cy, r, hairC, mood, age) {
     var skin = look.skin || '#F6C9A0', eyes = look.eyes || '#3B2314';
     s.push(circ(cx - r + 1, cy + 2, r * 0.22, shade(skin, -8)) + circ(cx + r - 1, cy + 2, r * 0.22, shade(skin, -8)));
-    s.push(circ(cx, cy, r, skin));
+    s.push(circ(cx, cy, r, skin, ' stroke="' + shade(skin, -38) + '" stroke-width="0.9"'));
+    s.push('<ellipse cx="' + f(cx - r * 0.3) + '" cy="' + f(cy - r * 0.42) + '" rx="' + f(r * 0.32) + '" ry="' + f(r * 0.16) + '" fill="#fff" opacity=".18"/>');
     var ey = cy + 1, ex = r * 0.38, eyeR = group === 'baby' ? r * 0.15 : r * 0.15;
     [-1, 1].forEach(function (side) {
       var x = cx + side * ex;
@@ -58,6 +59,11 @@
       s.push(circ(x + 1, ey - 1.3, eyeR * 0.36, '#fff'));
       if (group === 'older') s.push('<path d="M' + f(x + side * 4.5) + ' ' + f(ey - 1) + ' l' + (side * 2.5) + ' -1 M' + f(x + side * 4.5) + ' ' + f(ey + 1.5) + ' l' + (side * 2.5) + ' 1" stroke="' + shade(skin, -40) + '" stroke-width=".8" stroke-linecap="round"/>');
     });
+    if (group !== 'baby') {
+      var browC = shade(hairC === '#ECECEC' || hairC === '#C9C9C9' ? '#9E9E9E' : hairC, -25), by = ey - eyeR * 2.1, lift = mood >= 35 ? -1.2 : 0.8;
+      [-1, 1].forEach(function (side) { var bx = cx + side * ex; s.push('<path d="M' + f(bx - eyeR * 1.1) + ' ' + f(by + 0.6) + ' Q' + f(bx) + ' ' + f(by + lift * 1.4) + ' ' + f(bx + eyeR * 1.1) + ' ' + f(by + 0.6 + (side > 0 ? 0 : 0)) + '" stroke="' + browC + '" stroke-width="' + f(r * 0.07) + '" fill="none" stroke-linecap="round"/>'); });
+    }
+    s.push('<path d="M' + f(cx - r * 0.06) + ' ' + f(cy + r * 0.2) + ' Q' + f(cx) + ' ' + f(cy + r * 0.28) + ' ' + f(cx + r * 0.07) + ' ' + f(cy + r * 0.2) + '" stroke="' + shade(skin, -45) + '" stroke-width="' + f(r * 0.05) + '" fill="none" stroke-linecap="round"/>');
     s.push('<ellipse cx="' + f(cx - r * 0.58) + '" cy="' + f(cy + r * 0.32) + '" rx="' + f(r * 0.17) + '" ry="' + f(r * 0.11) + '" fill="#FF7A9A" opacity=".45"/>');
     s.push('<ellipse cx="' + f(cx + r * 0.58) + '" cy="' + f(cy + r * 0.32) + '" rx="' + f(r * 0.17) + '" ry="' + f(r * 0.11) + '" fill="#FF7A9A" opacity=".45"/>');
     var my = cy + r * 0.45, mw = r * 0.27;
@@ -171,6 +177,7 @@
     if (kind === 'trousers' || kind === 'dungarees') {
       var inset = of.bottom === 'leggings' ? 1.2 : 0;
       legsCloth(d.L + 1, bc, inset);
+      s.push(rect(rx + d.legW * 0.55, legTop, d.legW * 0.45, d.L, '#000', 3, ' opacity=".06"'));
       if (of.bottom === 'jeans') s.push('<path d="M' + f(lx + d.legW - 2.5) + ' ' + f(legTop + 2) + ' V' + f(legBot - 2) + ' M' + f(rx + 2.5) + ' ' + f(legTop + 2) + ' V' + f(legBot - 2) + '" stroke="' + shade(bc, 45) + '" stroke-width=".9" stroke-dasharray="2 1.5"/>');
       if (of.bottom === 'joggers' || of.bottom === 'babytrousers') s.push(rect(lx, legBot - 4, d.legW, 4, shade(bc, -30), 2) + rect(rx, legBot - 4, d.legW, 4, shade(bc, -30), 2) + '<path d="M' + f(lx + 1.5) + ' ' + f(legTop) + ' V' + f(legBot - 5) + ' M' + f(rx + d.legW - 1.5) + ' ' + f(legTop) + ' V' + f(legBot - 5) + '" stroke="#fff" stroke-width="1.2" opacity=".7"/>');
       if (of.bottom === 'cargo') s.push(rect(lx - 1, legTop + d.L * 0.35, 5, 7, shade(bc, -22), 1) + rect(rx + d.legW - 4, legTop + d.L * 0.35, 5, 7, shade(bc, -22), 1));
@@ -192,6 +199,9 @@
     if (kind !== 'onesie' && !tOver) s.push(path(torsoPath(cx, tTop, tBot, d.W, sh), tc));
     if (kind === 'onesie' || tOver) s.push(path(torsoPath(cx, tTop, tBot, d.W, sh), bc));
     if (!tOver && kind !== 'onesie') topDetails(s, of.top, tc, cx, tTop, tBot, d, sh);
+    // soft fabric shading: a light side and a shadowed side
+    s.push(path('M' + f(cx - hw + 3) + ' ' + f(tTop + sh) + ' Q' + f(cx - hw * 0.4) + ' ' + f(tTop + d.T * 0.5) + ' ' + f(cx - hw * 0.55) + ' ' + f(tBot - 2) + ' L' + f(cx - d.W * 0.44) + ' ' + f(tBot - 2) + ' Z', '#fff', ' opacity=".14"'));
+    s.push(path('M' + f(cx + hw - 2) + ' ' + f(tTop + sh) + ' L' + f(cx + d.W * 0.45) + ' ' + f(tBot) + ' L' + f(cx + hw * 0.62) + ' ' + f(tBot) + ' Q' + f(cx + hw * 0.7) + ' ' + f(tTop + d.T * 0.5) + ' ' + f(cx + hw - 2) + ' ' + f(tTop + sh) + ' Z', '#000', ' opacity=".07"'));
     if (kind === 'onesie') {
       if (of.bottom === 'jumpsuit') s.push(rect(cx - hipW / 2, tBot - 9, hipW, 3.5, shade(bc, -35)) + rect(cx - 2.5, tBot - 9.5, 5, 4.5, '#FFD43B', 1));
       else for (var sn = 0; sn < 3; sn++) s.push(circ(cx, tTop + 9 + sn * 6, 1.1, shade(bc, 45)));

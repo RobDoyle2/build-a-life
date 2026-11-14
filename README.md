@@ -64,6 +64,13 @@ enable it once under Settings → Pages → Source: "GitHub Actions").
 Sad moments are handled gently: pets "cross the Rainbow Bridge", and older relatives "lived a long and
 happy life". The player's own story only ends in old age.
 
+### Look & feel
+
+* Hand-drawn SVG artwork everywhere (no image files, so it's sharp on any screen): an animated scenic background that matches where you live (town, city, village, seaside, island, snowy mountains), illustrated buildings for every place on the town map, an outside picture of every home, and a room interior that shows the furniture and decorations you've bought, the people you live with and your pets.
+* Characters with eyebrows, soft outlines and shaded clothes; cute drawn pets; drawn birthday cakes.
+* Glassy rounded cards, chunky 3D buttons, colour-coded section tabs, smooth slide-in and hover animations — all calmed down automatically for players who prefer reduced motion.
+* Layouts for phones, tablets and computers.
+
 ### Child-friendly design
 
 * Big, chunky buttons, large emoji and short sentences.
@@ -87,8 +94,12 @@ Plain HTML, CSS and JavaScript — no build step, no dependencies (the Google Fo
 | `js/everyday.js` | My Day: the daily routine, hygiene & tummy needs, meals, school and work moments, Super Days, paying bills early and taxes |
 | `js/celebrations.js` | Birthday dates, party planning, invitations, presents, children's parties, family birthdays, seasonal festivals and the drawn birthday cake |
 | `js/challenges.js` | Life-stage challenges: catalogue, yearly selection, progress tracking, rewards, the birthday lock and the mini-game question generators |
+| `js/art.js` | Scenic backgrounds, house exteriors, room interiors and town buildings |
 | `js/avatar.js` | SVG avatars for every life stage: full-body (clothes, trousers, skirts, dresses, shoes) and head-and-shoulders portraits |
 | `js/storage.js` | Player profiles and their characters in `localStorage` (older saves are upgraded automatically), plus the tiny sound synthesiser |
+| `css/theme.css` | The visual design layer: colours, cards, tabs, buttons, motion and responsive layouts |
 | `js/ui.js` | Screens, panels, pop-ups, toasts and confetti |
+
+A browser test (`node tests/ui/crawl.cjs`, needs Playwright) creates characters at every life stage and clicks every button in every tab on computer, tablet and phone screen sizes, reporting errors, buttons with no handler and anything that makes the page wider than the screen.
 
 Engine tests live in `tests/game.test.js` and run with `npm test` (Node.js 20+, no dependencies).

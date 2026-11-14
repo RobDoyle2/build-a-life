@@ -13,6 +13,7 @@ await import('../js/pets.js');
 await import('../js/everyday.js');
 await import('../js/celebrations.js');
 await import('../js/avatar.js');
+await import('../js/art.js');
 await import('../js/storage.js');
 const BAL = globalThis.BAL;
 const G = BAL.Game;
@@ -1278,4 +1279,23 @@ test('every cake draws properly', () => {
       assert.doesNotMatch(svg, /NaN|undefined/);
     }
   }
+});
+
+/* ---------------- Artwork ---------------- */
+
+test('all the artwork draws properly: scenery, houses, rooms and town buildings', () => {
+  const ok = svg => { assert.match(svg, /^<svg[\s\S]*<\/svg>$/); assert.doesNotMatch(svg, /NaN|undefined|null/); };
+  for (const t of BAL.TOWNS) ok(BAL.sceneArt(t.type, t.colors[0], t.colors[1], { snowy: t.id === 'snow' }));
+  ok(BAL.sceneArt('town', '#fff', '#eee', { night: true }));
+  for (const h of ['parents'].concat(BAL.RENTALS.map(r => r.id), BAL.HOMES.map(h => h.id))) ok(BAL.houseArt(h));
+  for (const p of BAL.PLACES) ok(BAL.buildingArt(p.id, p.color));
+  lucky();
+  const l = G.newLife({ name: 'Decor', age: 30 });
+  ok(BAL.roomArt(l));
+  l.inventory = BAL.ITEMS.map(i => i.id);
+  l.pets.push({ id: 'pp', kind: 'cat', name: 'Tom', age: 1, love: 80 }); G.ensurePets(l);
+  l.people.push(G.makePerson('spouse', 30, 'boy', { livesWith: true }));
+  ok(BAL.roomArt(l));
+  for (const home of BAL.HOMES) { l.home = { type: 'own', id: home.id, value: 1, owed: 0 }; ok(BAL.roomArt(l)); }
+  assert.equal(BAL.homeKey(G.newLife({ name: 'Kid', age: 8 })), 'parents');
 });

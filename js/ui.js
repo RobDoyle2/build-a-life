@@ -205,6 +205,15 @@
     else if (l && ['game', 'end', 'look'].indexOf(S.screen) >= 0) t = G.town(l);
     document.documentElement.style.setProperty('--town1', t ? t.colors[0] : '#FFD6E8');
     document.documentElement.style.setProperty('--town2', t ? t.colors[1] : '#C9F2FF');
+    // scenic background that matches where you live (and night-time on the last day of a year)
+    var sky = document.getElementById('sky');
+    if (sky && BAL.sceneArt) {
+      var key = t ? t.id : 'none';
+      if (sky.getAttribute('data-key') !== key) {
+        sky.setAttribute('data-key', key);
+        sky.innerHTML = BAL.sceneArt(t ? t.type : 'town', t ? t.colors[0] : '#FFD6E8', t ? t.colors[1] : '#C9F2FF', { snowy: t && t.id === 'snow' });
+      }
+    }
   }
 
   function topbar() {
@@ -558,7 +567,7 @@
         : '<button class="btn ageup ready" data-act="ageUp"><span class="cake">🎂</span> Age Up!<small>Birthday ready — go to age ' + (l.age + 1) + '!</small></button>') +
       '</aside>' +
       '<section class="play">' + challengesCard(l) + '<nav class="tabs" aria-label="Game sections">' + tabs + '</nav>' +
-      '<div class="panel card pop" id="panel">' + renderPanel(l) + '</div></section></main>';
+      '<div class="panel card pop" id="panel" style="--tc:' + ((TABS.find(function (x) { return x.id === S.tab; }) || TABS[0]).color) + '">' + renderPanel(l) + '</div></section></main>';
   }
 
   function renderPanel(l) {
@@ -786,13 +795,15 @@
 
   function panelHome(l) {
     var hi = G.homeInfo(l), out = head('🏠', 'Home & Cars', esc(G.town(l).name) + ' ' + G.town(l).emoji);
-    out += '<div class="home-hero"><span class="home-emoji">' + hi.emoji + '</span><div><b class="lg">' + esc(hi.name) + '</b><div>' + esc(hi.kind) + '</div>' +
+    out += '<div class="home-hero"><span class="home-art">' + BAL.houseArt(BAL.homeKey(l)) + '</span><div><b class="lg">' + hi.emoji + ' ' + esc(hi.name) + '</b><div>' + esc(hi.kind) + '</div>' +
       (hi.yearly ? '<div>Rent: 🪙 ' + fmt(hi.yearly) + ' a year</div>' : '') +
       (l.home.type === 'own' ? '<div>Worth: 🪙 ' + fmt(l.home.value) + (l.home.owed > 0 ? ' · Still to pay: 🪙 ' + fmt(l.home.owed) + ' (🪙 ' + fmt(l.home.yearly) + '/year)' : ' · <b>Fully paid! 🎉</b>') + '</div>' : '') +
       '<div class="btn-row">' + (l.home.type === 'own' && l.home.owed > 0 ? btn('💰 Pay it all off', 'do', a('fn', 'payOffHome'), 'small') : '') +
       (l.home.type === 'own' ? btn('🪧 Sell home', 'confirm', a('fn', 'sellHome'), 'small ghost') : '') +
       (l.age >= 18 && l.home.type === 'rent' && l.people.some(function (p) { return ['mum', 'dad', 'grandma', 'grandpa'].indexOf(p.role) >= 0; }) ? btn('🏡 Move back with family', 'do', a('fn', 'moveHome'), 'small ghost') : '') +
       '</div></div></div>';
+    out += '<h3 class="sub">🛋️ Inside your home <small>(furniture and decorations from the Shop appear here — so do your family and pets!)</small></h3><div class="room-wrap">' + BAL.roomArt(l) + '</div>' +
+      '<div class="btn-row">' + btn('🛋️ Buy furniture', 'goShop', a('cat', 'home'), 'small') + btn('🎀 Buy decorations', 'goShop', a('cat', 'decor'), 'small') + '</div>';
     var helper = G.homeHelper(l);
     if (helper && l.home.type !== 'own') out += '<div class="tip">💑 You live with ' + esc(helper.name) + ', so you can buy a home together — ' + esc(helper.name) + ' will pay up to half the first payment (deposit)!</div>';
     if (l.home.together) { var tg = G.person(l, l.home.together); if (tg) out += '<div class="tip">🏡 You bought this home together with ' + esc(tg.name) + '. 💕</div>'; }
@@ -930,7 +941,7 @@
         var got = (l.partyItems || []).map(function (id) { var it = byId(BAL.ITEMS, id); return it ? it.emoji : ''; }).join(' ');
         return '<div class="tip">🎂 Plan your whole party — theme, cake, invitations — in the ' + btn('🎉 Celebrate', 'tab', a('id', 'celebrate'), 'small') + ' tab! Extra party things you buy here are used at your birthday too — the more party things, the happier you and your friends will be. ' + (got ? '<br><b>Party so far:</b> ' + got : '') + '</div>';
       }
-      case 'home': case 'decor': return '<div class="tip">🏡 Furniture and decorations make your home cosy: every 2 you own give you extra happiness on each birthday (cosiness now: +' + G.cosiness(l) + ' 😊). They move with you!</div>';
+      case 'home': case 'decor': return '<div class="room-wrap shop-room">' + BAL.roomArt(l, { people: false }) + '</div><div class="tip">🏡 Furniture and decorations make your home cosy: every 2 you own give you extra happiness on each birthday (cosiness now: +' + G.cosiness(l) + ' 😊). They move with you!</div>';
       case 'everyday': return '<div class="tip">🧴 Everyday shopping — the little things that keep you clean, healthy and ready for the day.</div>';
       default: return '';
     }
@@ -1218,7 +1229,7 @@
       var pl = G.place(p.id), here = w.loc === p.id;
       var seen = (w.visited[map.town.id] || []).indexOf(p.id) >= 0;
       return '<button class="tile-place' + (here ? ' here' : '') + (pl.special ? ' special' : '') + '" data-act="go"' + a('id', p.id) + ' style="grid-column:' + (p.x + 1) + ';grid-row:' + (p.y + 1) + ';--pc:' + pl.color + '" aria-label="Go to ' + esc(G.locLabel(l, map, p.id)) + '">' +
-        '<span class="tp-emoji">' + G.locEmoji(l, p.id) + '</span><span class="tp-name">' + esc(p.id === 'home' ? (G.isVisiting(l) ? 'Visitor Centre' : 'Home') : (p.name || pl.name)) + '</span>' + (seen ? '' : '<span class="tp-new">NEW</span>') + '</button>';
+        '<span class="tp-art">' + BAL.buildingArt(p.id, pl.color) + '</span><span class="tp-name">' + esc(p.id === 'home' ? (G.isVisiting(l) ? 'Visitor Centre' : 'Home') : (p.name || pl.name)) + '</span>' + (seen ? '' : '<span class="tp-new">NEW</span>') + '</button>';
     }).join('') + map.decor.map(function (d) { return '<span class="tile-decor" style="grid-column:' + (d.x + 1) + ';grid-row:' + (d.y + 1) + '" aria-hidden="true">' + d.decor + '</span>'; }).join('');
     var at = G.mapPlace(map, w.loc) || G.mapPlace(map, 'home');
     var pos = S.travelAnim ? S.travelAnim.from : at;
@@ -1233,7 +1244,8 @@
     var objs = G.placeObjects(l, id);
     var acts = (pl.acts || []).map(function (x) { return placeAct(l, x); }).join('');
     if (id === 'home' && G.isVisiting(l)) acts = btn('🏡 Go home', 'goHome', '', 'small primary') + btn('🚆 Another day trip', 'placeAct', a('trips', 1), 'small');
-    return '<div class="scene card pop" style="--pc:' + pl.color + '"><div class="scene-head"><span class="scene-emoji">' + G.locEmoji(l, id) + '</span><div><h3>' + esc(G.locLabel(l, map, id)) + '</h3><p>' + esc(id === 'home' && G.isVisiting(l) ? 'Maps, leaflets and a friendly welcome to ' + map.town.name + '.' : pl.desc) + '</p></div></div>' +
+    var view = id === 'home' && !G.isVisiting(l) ? '<div class="room-wrap small">' + BAL.roomArt(l) + '</div>' : '<div class="scene-bld">' + BAL.buildingArt(id, pl.color) + '</div>';
+    return '<div class="scene card pop" style="--pc:' + pl.color + '">' + view + '<div class="scene-head"><span class="scene-emoji">' + G.locEmoji(l, id) + '</span><div><h3>' + esc(G.locLabel(l, map, id)) + '</h3><p>' + esc(id === 'home' && G.isVisiting(l) ? 'Maps, leaflets and a friendly welcome to ' + map.town.name + '.' : pl.desc) + '</p></div></div>' +
       (ppl.length ? '<h4>👋 People here <small>(tap to chat)</small></h4><div class="scene-people">' + ppl.map(function (n) {
         return '<button class="npc" data-act="talk"' + a('id', n.id) + '><span class="npc-av">' + BAL.avatar(n.look, n.age, 80, { bg: '#fff' }) + '</span><b>' + esc(n.name) + '</b><small>' + n.emoji + ' ' + esc(n.title) + '</small></button>';
       }).join('') + '</div>' : '') +
@@ -1819,7 +1831,7 @@
     var cel = rep.celebration || { cake: { flavour: 'chocolate', shape: 'round', topper: 'sprinkles' }, theme: byId(BAL.PARTY_THEMES, 'family') };
     var cake = '<div class="grow-up" aria-hidden="true"><span class="gu-old">' + BAL.avatar(l.look, l.age - 1, 90, { full: true }) + '</span><span class="gu-arrow">➜</span><span class="gu-new">' + BAL.avatar(l.look, l.age, 95, { full: true }) + '<i class="sparkle s1">✨</i><i class="sparkle s2">⭐</i><i class="sparkle s3">✨</i></span></div>' +
       '<div class="bday-cake">' + BAL.cakeArt(cel.cake, Math.min(l.age, 10), true, { age: l.age, theme: cel.theme.emoji }) + '</div><p class="wish" hidden>✨ You made a wish! ✨</p>';
-    openModal({ cls: 'birthday', title: rep.ended ? 'Happy ' + l.age + 'th Birthday!' : '🎉 Happy Birthday, ' + esc(l.name) + '! 🎉',
+    openModal({ cls: 'birthday', title: rep.ended ? 'Happy ' + G.ordinal(l.age) + ' Birthday!' : '🎉 Happy Birthday, ' + esc(l.name) + '! 🎉',
       html: cake + '<p class="lead">You are now <b>' + l.age + '</b> year' + (l.age === 1 ? '' : 's') + ' old!</p>' +
         '<p class="gift">🎁 You got ' + esc(rep.gift.item) + (rep.gift.coins ? ' and <b>' + rep.gift.coins + ' coins</b> from your family!' : '!') + '</p>' +
         (rep.party ? '<p class="gift">🥳 Your party also had ' + esc(rep.party.join(', ')) + '!</p>' : '') +
@@ -1942,6 +1954,7 @@
       case 'edCancel': S.ed = null; S.screen = 'game'; BAL.sound('click'); render(); break;
       case 'tab': S.adopt = null; S.petShop = null; if (d('id') !== 'celebrate') { S.planner = null; S.kidPlanner = null; } S.tab = d('id'); BAL.sound('click'); render(); var pn = document.getElementById('panel'); if (pn && window.innerWidth < 900) pn.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' }); break;
       case 'shopCat': S.shopCat = d('id'); BAL.sound('click'); render(); break;
+      case 'goShop': S.tab = 'shop'; S.shopCat = d('cat'); BAL.sound('click'); render(); break;
       case 'ageUp': ageUp(); break;
       case 'go': if (!S.travelAnim) goTo(l, d('id')); break;
       case 'mode': G.ensureWorld(l).mode = d('id'); save(); BAL.sound('click'); render(); break;
@@ -2135,4 +2148,12 @@
     render();
   };
   UI._state = S; // for debugging/tests
+  UI._render = function () { render(); };
+  // Test helper: close every pop-up and sub-screen and go back to the game.
+  UI._reset = function () {
+    S.queue.length = 0; if (S.modal) nextModal(); if (S.game) closeMini();
+    S.ed = null; S.planner = null; S.kidPlanner = null; S.adopt = null; S.petShop = null; S.travelAnim = null;
+    var l = life(); S.screen = l ? (l.ended ? 'end' : 'game') : (Store.active() ? 'chars' : 'profiles');
+    render();
+  };
 })(globalThis.BAL = globalThis.BAL || {});
