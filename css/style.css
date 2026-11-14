@@ -689,3 +689,32 @@ details.money li { display: flex; justify-content: space-between; gap: 10px; fon
   .goal-done::after { content: ' Done!'; margin-left: 4px; }
   .milestone-tag { position: absolute; top: 10px; right: 10px; }
 }
+
+/* ---------- Economy ---------- */
+.tabs { grid-template-columns: repeat(6, 1fr); }
+@media (max-width: 560px) { .tabs { grid-template-columns: repeat(4, 1fr); } }
+.skills-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.skill { background: #FBFAFF; border: 3px solid #F1EEFF; border-radius: 18px; padding: 10px 12px; }
+.skill-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.skill-emoji { font-size: 24px; }
+.skill-lvl { margin-left: auto; font-weight: 800; font-family: var(--font-head); background: #EDE8FF; color: var(--primary-dark); border-radius: 999px; padding: 1px 10px; }
+.skill .btn-row { margin-top: 8px; gap: 6px; }
+.skill .btn.small { min-height: 36px; padding: 5px 10px; font-size: .82rem; }
+.warn { margin-top: 6px; background: #FFF4E6; border: 2px solid #FFC078; border-radius: 12px; padding: 6px 10px; font-size: .9rem; font-weight: 600; }
+.wallet { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 4px; }
+.wallet > div { flex: 1 1 160px; display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; border-radius: 20px; background: #FBFAFF; border: 3px solid #F1EEFF; }
+.wallet small { color: var(--ink-soft); font-weight: 600; }
+.wallet b { font-family: var(--font-head); font-size: 1.7rem; }
+.wallet-coins { background: linear-gradient(180deg, #FFF9DB, #FFF3BF) !important; border-color: #FFE066 !important; }
+.wallet-owed { background: #FFF0F0 !important; border-color: #FFC9C9 !important; }
+.rescue { margin: 14px 0; padding: 14px 16px; border-radius: 20px; background: linear-gradient(160deg, #E7F5FF, #fff); border: 3px solid #A5D8FF; }
+.rescue h3 { font-size: 1.3rem; }
+.rescue p { margin: 6px 0; }
+.rescue-steps { margin: 6px 0 4px; padding-left: 22px; display: grid; gap: 4px; }
+.money-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.money-col { background: #FBFAFF; border-radius: 18px; padding: 10px 14px; border: 3px solid #F1EEFF; }
+.money-col h4 { margin: 2px 0 6px; font-family: var(--font-head); font-size: 1.1rem; }
+.money-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.money-list li { display: flex; justify-content: space-between; gap: 10px; font-size: .92rem; }
+.tip .btn.small { margin-left: 6px; vertical-align: middle; }
+@media (max-width: 700px) { .money-cols { grid-template-columns: 1fr; } }

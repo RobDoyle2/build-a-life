@@ -195,7 +195,7 @@
       stats: { happy: 85, health: randInt(82, 95), smarts: randInt(10, 22), fitness: randInt(10, 22) },
       coins: o.coins || 0, energy: 0, maxEnergy: 0,
       edu: { level: 0, grade: 50, course: null, clubs: [] },
-      job: null, partTime: null, retired: false, pension: 0, bestJob: null,
+      job: null, sideJobs: [], business: null, owed: 0, groceries: null, partyItems: [], retired: false, pension: 0, bestJob: null,
       home: { type: 'family' }, cars: [], licence: false,
       people: [], pets: [], inventory: [], unlocked: (o.unlocked || []).slice(), remembered: [],
       sick: null, chores: [], log: [], achievements: [], newAch: [],
@@ -236,17 +236,24 @@
     if (age >= 18) { life.edu.level = 2; life.home = { type: 'rent', id: 'tinyflat' }; }
     if (age >= 3) { life.stats.smarts = clamp(30 + age * 2 + randInt(0, 10)); life.stats.fitness = randInt(35, 60); }
 
+    if (G.ensureEconomy) G.ensureEconomy(life);
     resetYear(life);
     addLog(life, age === 0 ? 'Born in ' + G.town(life).name + '! Welcome to the world, ' + life.name + '.' : life.name + ' starts their own story at age ' + age + '.', age === 0 ? '👶' : '🌟');
     return life;
   };
 
-  function resetYear(life) {
-    var max = G.stageInfo(life.age).energy;
-    if (life.partTime) max -= 1;
-    if (life.job) max -= 1;
+  // Every job you have takes a little of your yearly energy.
+  G.resetEnergyMax = function (life) {
+    var max = G.stageInfo(life.age).energy - (G.jobCount ? G.jobCount(life) : (life.job ? 1 : 0));
     life.maxEnergy = Math.max(3, max);
+    life.energy = Math.min(life.energy, life.maxEnergy);
+  };
+  function resetYear(life) {
+    life.energy = 99;
+    G.resetEnergyMax(life);
     life.energy = life.maxEnergy;
+    life.groceries = null;
+    life.flags.askedFamily = false;
     life.chores = makeChores(life);
     life.flags.askedPet = false;
     life.flags.babyYear = false;
@@ -306,6 +313,7 @@
     if (a.counter) life.totals[a.counter] = (life.totals[a.counter] || 0) + 1;
     if (a.ach) unlock(life, a.ach);
     life.totals.activities += 1;
+    if (G.activitySkill) G.activitySkill(life, a.id);
     if (a.id === 'holiday') addLog(life, 'Went on a lovely holiday', '✈️');
     return ok(a.msg, a.emoji);
   };
@@ -393,6 +401,8 @@
     if (life.edu.level < job.edu) why.push('Needs: ' + BAL.EDU_LEVELS[job.edu]);
     if (life.stats.smarts < job.smarts) why.push('Needs ' + job.smarts + ' 🧠 smarts');
     if (life.stats.fitness < job.fitness) why.push('Needs ' + job.fitness + ' 💪 fitness');
+    if (job.lvl && G.skillLevel && G.skillLevel(life, job.skill) < job.lvl) why.push('Needs ' + byId(BAL.SKILLS, job.skill).name + ' level ' + job.lvl);
+    if (job.licence && !life.licence) why.push('Needs a driving licence');
     return { ok: why.length === 0, why: why };
   };
 
@@ -402,12 +412,17 @@
     if (life.job && life.job.id === id) return no('You already work here!');
     var chk = G.jobCheck(life, job);
     if (!chk.ok) return no('Not yet! ' + chk.why.join(', ') + '.', '📋');
+    if (!life.job && G.jobCount && G.jobCount(life) >= BAL.MAX_JOBS) return no('You already have ' + BAL.MAX_JOBS + ' jobs! Leave a side job or your business to make time.', '😅');
     if (!needEnergy(life)) return no(TIRED, '😴');
     life.energy -= 1;
-    var chance = clamp(0.55 + life.edu.grade / 400 + (life.stats.smarts - job.smarts) / 250, 0.35, 0.95);
+    var skillBoost = job.skill && G.skillLevel ? (G.skillLevel(life, job.skill) - (job.lvl || 0)) * 0.05 : 0;
+    var chance = clamp(0.55 + life.edu.grade / 400 + (life.stats.smarts - job.smarts) / 250 + skillBoost, 0.35, 0.95);
     if (r() > chance) { applyFx(life, { happy: -2 }); return no('The interview was tricky — they chose someone else this time. Keep trying! 💪', '🤞'); }
-    life.job = { id: id, level: 0, perf: 35, years: 0 };
+    var hadJob = !!life.job;
+    life.job = { id: id, level: 0, perf: 35, years: 0, deductions: 0, warnings: 0 };
     life.retired = false;
+    if (!hadJob) G.resetEnergyMax(life);
+    if (G.jobCount && G.jobCount(life) >= 3) unlock(life, 'multitasker');
     life.bestJob = G.jobTitle(life);
     applyFx(life, { happy: 8 });
     unlock(life, 'first_job');
@@ -420,9 +435,26 @@
     if (!life.job) return no('You don\'t have a job yet.');
     if (!needEnergy(life)) return no(TIRED, '😴');
     life.energy -= 1;
-    life.job.perf = clamp(life.job.perf + randInt(12, 20));
+    var j = G.job(life), base = G.salary(life);
+    var lvl = G.skillLevel ? G.skillLevel(life, j.skill) : 0;
+    if (G.addSkill) G.addSkill(life, j.skill, 3);
     applyFx(life, { smarts: 1, happy: -1 });
-    return ok(pick(['You worked super hard today!', 'Your boss noticed your great work.', 'You finished a big project!', 'You helped a teammate solve a problem.']), '💼');
+    var roll = r();
+    var mistakeChance = Math.max(0.04, 0.2 - lvl * 0.03);
+    if (roll > 1 - mistakeChance) {
+      var cut = Math.round(base * 0.03);
+      life.job.deductions = (life.job.deductions || 0) + cut;
+      life.job.perf = clamp(life.job.perf + 4);
+      return ok('Oops! You ' + G.mistakeText(j.id) + '. 🙈 ' + fmt(cut) + ' coins will come off your next pay. Learning skills means fewer mistakes!', '🙈', { mistake: true });
+    }
+    life.job.perf = clamp(life.job.perf + randInt(12, 20));
+    if (life.job.warnings && life.job.perf >= 50) life.job.warnings = 0;
+    if (roll < 0.15) {
+      var bonus = Math.round(base * 0.05);
+      addCoins(life, bonus);
+      return ok('Brilliant work! Your boss gave you an on-the-spot bonus of ' + fmt(bonus) + ' coins! 🎁', '🎁', { celebrate: true });
+    }
+    return ok(pick(['You worked super hard today!', 'Your boss noticed your great work.', 'You finished a big project!', 'You helped a teammate solve a problem.']), j.emoji);
   };
 
   A.askPromotion = function (life) {
@@ -448,6 +480,7 @@
     var j = G.job(life);
     addLog(life, 'Left the job as ' + j.name, '👋');
     life.job = null;
+    G.resetEnergyMax(life);
     return ok('You left your job. Time for something new!', '👋');
   };
 
@@ -807,19 +840,21 @@
   A.buyItem = function (life, id) {
     var it = byId(BAL.ITEMS, id);
     if (!it) return no('No such item');
-    if (!it.consumable && life.inventory.indexOf(id) >= 0) return no('You already have one! 😊');
+    if (it.party && G.partyBought(life, id)) return no('You\'ve already got that for your next birthday! 🎉');
+    if (!it.consumable && !it.party && life.inventory.indexOf(id) >= 0) return no('You already have one! 😊');
     var price = G.itemPrice(life, it);
     if (life.coins < price) return no('You need ' + fmt(price) + ' coins. Save up! 🐷', '🪙');
     addCoins(life, -price);
     applyFx(life, it.fx);
-    if (!it.consumable) life.inventory.push(id);
+    if (it.party) life.partyItems.push(id);
+    else if (!it.consumable) life.inventory.push(id);
     if (it.unlock) {
       if (life.unlocked.indexOf(it.unlock) < 0) life.unlocked.push(it.unlock);
       if (!it.slot || it.slot === 'accessory') life.look.accessory = it.unlock;
       else life.look.outfits[G.ageGroup(life.age)][it.slot] = it.unlock;
     }
     life.totals.items += 1;
-    return ok('You bought ' + (it.consumable ? 'a ' : 'a ') + it.name + '!' + (it.unlock ? ' You are wearing it now!' : ''), it.emoji);
+    return ok('You bought ' + it.name + '!' + (it.unlock ? ' You are wearing it now!' : '') + (it.party ? ' It\'s saved for your next birthday party! 🎉' : ''), it.emoji);
   };
 
   A.setAccessory = function (life, acc) {
@@ -944,18 +979,22 @@
 
   /* ---------- the big one: a year goes by ---------- */
   G.yearlyMoney = function (life) {
-    // Returns lines of income and bills for the coming age-up (for the year just lived).
+    // Income and bills for the year just lived (shown on the birthday payslip).
     var t = G.town(life), lines = [];
     var adult = life.age >= 18;
-    if (life.job) lines.push({ e: G.job(life).emoji, t: 'Pay from your job', v: G.salary(life) });
-    if (life.partTime) { var pt = byId(BAL.PART_TIME, life.partTime); lines.push({ e: pt.emoji, t: pt.name + ' pay', v: pt.pay }); }
-    if (!life.job && life.pension) lines.push({ e: '🏖️', t: 'Pension', v: life.pension });
-    else if (!life.job && life.age >= 67) lines.push({ e: '🏖️', t: 'State pension', v: Math.round(6000 * t.pay) });
+    lines = lines.concat(G.payslip ? G.payslip(life) : []);
+    var working = life.job || life.business;
+    if (!working && life.pension) lines.push({ e: '🏖️', t: 'Pension', v: life.pension });
+    else if (!working && life.age >= 67) lines.push({ e: '🏖️', t: 'State pension', v: Math.round(6000 * t.pay) });
+    else if (!working && adult && !life.edu.course && !life.retired) lines.push({ e: '🤝', t: 'Jobseeker support (while you look for work)', v: Math.round(2500 * t.pay) });
     if (life.edu.course) lines.push({ e: '🎓', t: 'Student grant', v: Math.round(2500 * t.price) });
     if (life.age >= 5 && life.age < 18) lines.push({ e: '🐷', t: 'Pocket money', v: 20 + life.age * 4 });
     if (adult) {
-      if (life.home.type === 'family') lines.push({ e: '🏡', t: 'Help with family bills', v: -G.price(life, 400) });
-      else lines.push({ e: '🛒', t: 'Food & living costs', v: -G.price(life, 1500) });
+      if (life.home.type === 'family') lines.push({ e: '🏡', t: 'Chipping in for family food & bills', v: -G.price(life, 400) });
+      else {
+        if (!life.groceries) { var bb = BAL.GROCERY_BASKETS[0]; lines.push({ e: bb.emoji, t: 'Groceries: ' + bb.name + ' (picked for you)', v: -G.groceryCost(life, bb) }); }
+        lines.push({ e: '💡', t: 'Energy & water bills', v: -G.price(life, 400) });
+      }
       if (life.home.type === 'rent') { var rt = byId(BAL.RENTALS, life.home.id); lines.push({ e: rt.emoji, t: 'Rent', v: -G.price(life, rt.rent) }); }
       if (life.home.type === 'own') {
         if (life.home.owed > 0) lines.push({ e: '🏦', t: 'Home payment', v: -Math.min(life.home.owed, life.home.yearly), loan: true });
@@ -964,7 +1003,7 @@
       life.cars.forEach(function (c) { var cc = byId(BAL.CARS, c.id); lines.push({ e: '⛽', t: cc.name + ' fuel & repairs', v: -Math.round(300 + cc.price * 0.03) }); });
       if (life.pets.length) lines.push({ e: '🐾', t: 'Pet food & vet', v: -life.pets.reduce(function (s, p) { return s + G.price(life, byId(BAL.PETS, p.kind).cost); }, 0) });
       var kidsHome = G.children(life).filter(function (k) { return k.age < 18; }).length;
-      if (kidsHome) lines.push({ e: '🧸', t: 'Looking after children', v: -G.price(life, 1000) * kidsHome });
+      if (kidsHome) lines.push({ e: '🧸', t: 'Children\'s clothes, school things & clubs', v: -G.price(life, 600) * kidsHome });
     }
     return lines;
   };
@@ -984,10 +1023,39 @@
     var net = money.reduce(function (s, l) { return s + l.v; }, 0);
     money.forEach(function (l) { if (l.loan && life.home.type === 'own') life.home.owed = Math.max(0, life.home.owed + l.v); });
     if (life.coins + net < 0) {
-      rep.notes.push({ e: '😟', t: 'Money was tight this year! Your coins ran out. Try a cheaper home or a better job.' });
-      applyFx(life, { happy: -8 });
+      // Never below zero: the shortfall becomes money owed (no interest), with a cap so it never spirals.
+      var short = -(life.coins + net);
+      life.owed = (life.owed || 0) + short;
+      var cap = G.owedCap ? G.owedCap(life) : Infinity;
+      if (life.owed > cap) {
+        rep.notes.push({ e: '💛', t: 'The Money Helper charity paid ' + fmt(life.owed - cap) + ' coins of your bills to help you get back on your feet.' });
+        life.owed = cap;
+      }
+      rep.notes.push({ e: '💸', t: 'You didn\'t have enough coins for all your bills, so you now owe ' + fmt(life.owed) + ' coins (no interest!). Check the 🪙 Money tab for your rescue plan.' });
+      rep.moneyTrouble = true;
+      applyFx(life, { happy: -5 });
+      addCoins(life, -life.coins);
+    } else {
+      addCoins(life, net);
+      if (life.owed > 0 && life.coins > 0) {
+        var repay = Math.min(life.owed, Math.round(life.coins * 0.5));
+        if (repay > 0) {
+          life.owed -= repay; addCoins(life, -repay);
+          money.push({ e: '💸', t: 'Paid back money owed', v: -repay });
+          if (!life.owed) { unlock(life, 'debt_free'); rep.notes.push({ e: '🌈', t: 'You have paid back everything you owed. Well done!' }); }
+        }
+      }
     }
-    addCoins(life, net);
+    // Party items bought for this birthday
+    if (life.partyItems && life.partyItems.length) {
+      var pts = life.partyItems.reduce(function (s2, id) { var it = byId(BAL.ITEMS, id); return s2 + ((it && it.party) || 0); }, 0);
+      applyFx(life, { happy: Math.min(15, pts * 3) });
+      life.people.forEach(function (p) { if (p.role === 'friend') p.close = clamp(p.close + pts * 2); });
+      rep.party = life.partyItems.map(function (id) { var it = byId(BAL.ITEMS, id); return it ? it.emoji + ' ' + it.name : ''; });
+      if (life.partyItems.length >= 5) unlock(life, 'party');
+      life.partyItems = [];
+    }
+    if (G.cosiness && G.cosiness(life)) applyFx(life, { happy: G.cosiness(life) });
     rep.money = money; rep.net = net;
     life.totals.happySum += life.stats.happy; life.totals.years += 1;
 
@@ -1076,11 +1144,33 @@
 
     // 7. Work
     if (life.job) {
+      var jj = G.job(life);
       life.job.years += 1;
-      life.job.perf = clamp(life.job.perf - 8);
-      if (life.job.perf <= 5) { rep.notes.push({ e: '⚠️', t: 'Your boss says you need to work harder (use "Work hard").' }); }
+      life.job.deductions = 0;
+      if (life.job.perf < 15) {
+        life.job.warnings = (life.job.warnings || 0) + 1;
+        if (life.job.warnings >= 2) {
+          addLog(life, 'Was let go from the job as ' + jj.name, '📦');
+          rep.notes.push({ e: '📦', t: 'Oh no — you were let go from your job as a ' + jj.name + ' because your work bar stayed too low. Don\'t worry: apply for a new job, do side jobs or odd jobs, and you\'ll get jobseeker support meanwhile.' });
+          life.job = null; rep.fired = jj.name;
+          applyFx(life, { happy: -8 });
+        } else {
+          rep.notes.push({ e: '⚠️', t: 'Warning from your boss: your work bar is very low! Use "Work hard" this year, or you could lose your job.' });
+        }
+      } else if (life.job.perf >= 50) life.job.warnings = 0;
+      if (life.job) life.job.perf = clamp(life.job.perf - 8);
     }
-    if (life.partTime && life.age >= 18) { rep.notes.push({ e: '👋', t: 'Your part-time job has ended. Time to find a grown-up job!' }); life.partTime = null; }
+    if (life.business) {
+      life.business.years += 1;
+      life.business.lastProfit = (money.find(function (m) { return m.biz; }) || {}).v || 0;
+      life.business.effort = clamp(life.business.effort - 10);
+    }
+    (life.sideJobs || []).slice().forEach(function (x) {
+      var sj = byId(BAL.SIDE_JOBS, x.id);
+      x.years += 1;
+      if (sj && life.age > sj.maxAge) { life.sideJobs = life.sideJobs.filter(function (y) { return y !== x; }); rep.notes.push({ e: '👋', t: 'You\'ve grown out of your ' + sj.name + ' job. Try a grown-up side job or a full-time job!' }); }
+    });
+    life.levelUps = [];
 
     // 8. People
     var gone = [];

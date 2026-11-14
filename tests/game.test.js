@@ -6,6 +6,7 @@ await import('../js/data.js');
 await import('../js/wardrobe.js');
 await import('../js/game.js');
 await import('../js/challenges.js');
+await import('../js/economy.js');
 await import('../js/avatar.js');
 await import('../js/storage.js');
 const BAL = globalThis.BAL;
@@ -68,6 +69,8 @@ test('university leads to a degree and better jobs; promotions work', () => {
   grow(l, 3);
   assert.equal(l.edu.level, 4);
   l.stats.smarts = 90;
+  assert.equal(G.jobCheck(l, G.byId(BAL.JOBS, 'doctor')).ok, false, 'doctors need science skills');
+  l.skills.science = 60;
   const r = G.run(l, 'applyJob', 'doctor');
   assert.ok(r.ok, r.msg);
   assert.equal(G.salary(l), Math.round(36000 * G.town(l).pay));
@@ -367,6 +370,8 @@ function solveYear(l) {
     if (acts.includes('study')) { G.run(l, 'study'); continue; }
     if (acts.includes('joinClub')) { G.run(l, 'joinClub', BAL.CLUBS.find(x => !l.edu.clubs.includes(x.id)).id); continue; }
     if (acts.includes('partTime')) { G.run(l, 'partTime', 'paper'); continue; }
+    if (acts.includes('oddJob')) { G.run(l, 'oddJob', G.oddJobs(l)[0].id); continue; }
+    if (acts.includes('payBack')) { if (!l.coins) G.run(l, 'oddJob', G.oddJobs(l)[0].id); else G.run(l, 'payBack'); continue; }
     if (acts.includes('workHard')) { G.run(l, 'workHard'); continue; }
     if (acts.includes('playPet')) { G.run(l, 'playPet', l.pets[0].id); continue; }
     // state challenges
@@ -464,4 +469,179 @@ test('whole lives can be played through every stage by completing challenges', (
     assert.ok(l.totals.challenges >= l.age * 3 - 3);
     assert.ok(l.achievements.includes('champion'));
   }
+});
+
+/* ---------------- Economy ---------------- */
+
+function adult(age, extra) {
+  lucky();
+  const l = G.newLife(Object.assign({ name: 'Worker', age: age || 25 }, extra || {}));
+  l.edu.level = 4; l.stats.smarts = 95; l.stats.fitness = 90;
+  return l;
+}
+
+test('the jobs include the classic careers and every job has a key skill', () => {
+  for (const id of ['doctor', 'teacher', 'police', 'chef', 'shop', 'hair', 'vet', 'builder']) assert.ok(G.byId(BAL.JOBS, id), id);
+  assert.ok(BAL.JOBS.length >= 30);
+  for (const j of BAL.JOBS) assert.ok(G.byId(BAL.SKILLS, j.skill), j.id + ' has a skill');
+  assert.ok(BAL.BUSINESSES.length >= 5, 'business owner options');
+});
+
+test('players can have up to 3 jobs: a job, a business and side jobs', () => {
+  const l = adult(25);
+  const e0 = l.maxEnergy;
+  l.skills.cooking = 60; l.coins = 10000;
+  assert.ok(G.run(l, 'applyJob', 'chef').ok);
+  assert.ok(G.run(l, 'startBusiness', 'bakery').ok);
+  assert.ok(G.run(l, 'takeSideJob', 'tutor').ok);
+  assert.equal(G.jobCount(l), 3);
+  assert.equal(l.maxEnergy, Math.max(3, e0 - 3), 'each job uses some energy');
+  assert.equal(G.run(l, 'takeSideJob', 'market').ok, false, 'a 4th job is too many');
+  assert.ok(l.achievements.includes('multitasker'));
+  const lines = G.payslip(l).map(x => x.t).join(' | ');
+  assert.match(lines, /Salary/); assert.match(lines, /profit/); assert.match(lines, /Tutor/);
+});
+
+test('salaries, bonuses, mistakes and promotions', () => {
+  const l = adult(30);
+  l.skills.people = 0;
+  assert.ok(G.run(l, 'applyJob', 'shop').ok);
+  const base = G.salary(l);
+  // a lucky roll gives an on-the-spot bonus
+  lucky(); l.energy = 5;
+  const before = l.coins;
+  const r1 = G.run(l, 'workHard');
+  assert.ok(l.coins > before, r1.msg);
+  // an unlucky roll is a mistake that comes off the next pay
+  unlucky(); l.energy = 5;
+  const r2 = G.run(l, 'workHard');
+  assert.ok(r2.mistake, r2.msg);
+  assert.ok(l.job.deductions > 0);
+  l.job.perf = 90;
+  const slip = G.payslip(l);
+  assert.ok(slip.some(x => x.bonus), 'performance bonus on payday');
+  assert.ok(slip.some(x => x.v < 0), 'mistakes deducted');
+  assert.ok(slip.find(x => x.v < 0).v >= -Math.round(base * 0.3), 'deductions are capped');
+  lucky();
+  grow(l, 1); l.job.perf = 95;
+  assert.ok(G.run(l, 'askPromotion').ok);
+  assert.ok(G.salary(l) > base);
+});
+
+test('you can be fired for a low work bar, and get jobseeker support', () => {
+  const l = adult(30);
+  assert.ok(G.run(l, 'applyJob', 'shop').ok);
+  l.job.perf = 0;
+  let rep = G.ageUp(l, { force: true });
+  assert.ok(l.job, 'first a warning');
+  assert.ok(rep.notes.some(n => /Warning/.test(n.t)));
+  l.job.perf = 0;
+  rep = G.ageUp(l, { force: true });
+  assert.equal(l.job, null);
+  assert.equal(rep.fired, 'Shop Assistant');
+  assert.ok(G.yearlyMoney(l).some(m => /Jobseeker support/.test(m.t)));
+});
+
+test('learning skills unlocks jobs', () => {
+  const l = adult(25);
+  l.skills.science = 0;
+  assert.equal(G.jobCheck(l, G.byId(BAL.JOBS, 'doctor')).ok, false);
+  for (let i = 0; i < 9; i++) { l.energy = 5; const r = G.run(l, 'learnSkill', 'science'); assert.ok(r.ok, r.msg); }
+  assert.ok(G.skillLevel(l, 'science') >= 3);
+  assert.ok(G.jobCheck(l, G.byId(BAL.JOBS, 'doctor')).ok);
+  l.coins = 0; l.energy = 5;
+  assert.equal(G.run(l, 'learnSkill', 'tech', '1').ok, false, 'paid classes need coins');
+  assert.ok(G.run(l, 'learnSkill', 'tech').ok, 'the library course is free');
+});
+
+test('a business earns profit, can grow and can be sold', () => {
+  const l = adult(30);
+  l.coins = 2000;
+  assert.equal(G.run(l, 'startBusiness', 'toyshop').ok, false, 'need enough coins');
+  l.coins = 50000;
+  assert.ok(G.run(l, 'startBusiness', 'florist').ok);
+  const p1 = G.bizProfitEstimate(l);
+  assert.ok(p1 > 0);
+  for (let i = 0; i < 3; i++) { l.energy = 5; G.run(l, 'workBusiness'); }
+  assert.ok(G.bizProfitEstimate(l) > p1, 'effort helps');
+  assert.ok(G.run(l, 'growBusiness').ok);
+  assert.equal(l.business.level, 1);
+  const coins = l.coins;
+  grow(l, 1);
+  assert.ok(l.business.lastProfit > 0);
+  assert.ok(G.run(l, 'sellBusiness').ok);
+  assert.equal(l.business, null);
+  assert.ok(l.coins > coins);
+});
+
+test('groceries, furniture, decorations and birthday parties', () => {
+  const l = adult(25);
+  l.coins = 5000;
+  assert.ok(G.run(l, 'buyGroceries', 'healthy').ok);
+  assert.equal(G.run(l, 'buyGroceries', 'treat').ok, false, 'one food shop a year');
+  assert.ok(!G.yearlyMoney(l).some(m => /Groceries/.test(m.t)), 'already paid');
+  for (const id of ['sofa', 'rug', 'fairylights', 'bunting']) assert.ok(G.run(l, 'buyItem', id).ok, id);
+  assert.equal(G.cosiness(l), 2);
+  for (const id of ['p_cake', 'p_balloons', 'p_bags', 'p_games', 'p_castle']) assert.ok(G.run(l, 'buyItem', id).ok);
+  assert.equal(G.run(l, 'buyItem', 'p_cake').ok, false, 'one cake per party');
+  const rep = G.ageUp(l, { force: true });
+  assert.equal(rep.party.length, 5);
+  assert.ok(l.achievements.includes('party'));
+  assert.equal(l.partyItems.length, 0);
+  assert.ok(G.yearlyMoney(l).some(m => /Groceries: Budget Basket/.test(m.t)), 'a budget basket is paid if you do not shop');
+  const kid = G.newLife({ name: 'Kid', age: 9 });
+  assert.equal(G.run(kid, 'buyGroceries', 'budget').ok, false, 'families buy the food for children');
+});
+
+test('running out of coins is manageable and never a dead end', () => {
+  const l = adult(25);
+  l.coins = 0;
+  l.home = { type: 'rent', id: 'rentcottage' };
+  l.cars.push({ uid: 'c1', id: 'sports' });
+  const rep = G.ageUp(l, { force: true });
+  assert.ok(rep.moneyTrouble);
+  assert.equal(l.coins, 0, 'coins never go below zero');
+  assert.ok(l.owed > 0 && l.owed <= G.owedCap(l), 'money owed is capped');
+  assert.ok(l.goals.some(g => G.challenge(g.id).money), 'a money rescue challenge appears');
+  assert.ok(G.oddJobs(l).length > 0, 'there are always odd jobs');
+  l.energy = 5;
+  assert.ok(G.run(l, 'oddJob', 'fixing').ok);
+  assert.ok(l.coins > 0);
+  assert.ok(G.run(l, 'askFamily').ok || !G.canAskFamily(l));
+  const owed = l.owed;
+  assert.ok(G.run(l, 'payBack').ok);
+  assert.ok(l.owed < owed);
+  l.coins = l.owed;
+  assert.ok(G.run(l, 'payBack').ok);
+  assert.equal(l.owed, 0);
+  assert.ok(l.achievements.includes('debt_free'));
+  // many terrible years in a row still cannot break the game
+  l.home = { type: 'rent', id: 'rentcottage' };
+  for (let i = 0; i < 10; i++) { l.coins = 0; G.ageUp(l, { force: true }); assert.ok(l.coins >= 0 && l.owed <= G.owedCap(l)); }
+});
+
+test('children earn through chores, odd jobs and part-time jobs, and have no bills', () => {
+  lucky();
+  const kid = G.newLife({ name: 'Kit', age: 9 });
+  assert.ok(G.yearlyMoney(kid).every(m => m.v >= 0), 'no bills for children');
+  assert.ok(G.run(kid, 'oddJob', 'carwash').ok);
+  assert.equal(G.run(kid, 'startBusiness', 'bakery').ok, false);
+  const teen = G.newLife({ name: 'Tia', age: 15 });
+  assert.ok(G.run(teen, 'takeSideJob', 'paper').ok);
+  assert.ok(G.run(teen, 'takeSideJob', 'dogwalk').ok);
+  assert.equal(G.run(teen, 'takeSideJob', 'babysit').ok, false, 'two part-time jobs alongside school');
+  const c = teen.coins;
+  assert.ok(G.run(teen, 'workShift', 'paper').ok);
+  assert.ok(teen.coins > c);
+});
+
+test('older saves get the economy added', () => {
+  lucky();
+  const l = G.newLife({ name: 'Old', age: 15 });
+  delete l.skills; delete l.sideJobs; delete l.owed; l.partTime = 'paper';
+  G.ensureEconomy(l);
+  assert.deepEqual(l.sideJobs.map(x => x.id), ['paper']);
+  assert.equal(l.partTime, undefined);
+  assert.equal(Object.keys(l.skills).length, BAL.SKILLS.length);
+  assert.equal(l.owed, 0);
 });

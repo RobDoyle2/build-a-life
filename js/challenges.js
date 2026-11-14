@@ -62,7 +62,7 @@
     { id: 'tn_graduate', stage: 'teen', emoji: '🎓', name: 'Ready to Graduate', desc: 'Get your school report to 3 stars or more so you can graduate.', track: { state: function (l) { return G.gradeStars(l) >= 3; } }, tab: 'school', stars: 3, fixed: [17], hint: 'Study hard to raise your report!' },
     { id: 'tn_friends', stage: 'teen', emoji: '🛹', name: 'Squad Goals', desc: 'Hang out with your friends.', track: { act: 'activity', ids: ['friends'], n: 1 }, tab: 'activities', stars: 1 },
     { id: 'tn_skill', stage: 'teen', emoji: '💻', name: 'Learn a Skill', desc: 'Practise a skill twice: coding, music or sport.', track: { act: 'activity', ids: ['code', 'instrument', 'sport'], n: 2 }, tab: 'activities', stars: 1 },
-    { id: 'tn_parttime', stage: 'teen', emoji: '📰', name: 'Earn Some Money', desc: 'Start a part-time job.', track: { act: 'partTime', n: 1 }, tab: 'school', stars: 2, min: 14, when: function (l) { return !l.partTime; } },
+    { id: 'tn_parttime', stage: 'teen', emoji: '📰', name: 'Earn Some Money', desc: 'Start a part-time job.', track: { act: ['partTime', 'takeSideJob'], n: 1 }, tab: 'school', stars: 2, min: 14, when: function (l) { return !(l.sideJobs || []).length; } },
     { id: 'tn_maths', stage: 'teen', emoji: '➗', name: 'Maths Challenge', desc: 'Solve the maths challenge.', track: { game: 'quiz', kind: 'maths' }, stars: 2 },
     { id: 'tn_jobs', stage: 'teen', emoji: '♻️', name: 'Pull Your Weight', desc: 'Finish all your daily jobs.', track: { chores: true }, tab: 'chores', stars: 1 },
 
@@ -148,6 +148,13 @@
     take(fresh.slice());
     take(rest.slice());
     if (chosen.length < 3) rest.forEach(function (c) { if (chosen.length < 3 && chosen.indexOf(c) < 0) chosen.push(c); });
+    // Money trouble? One of the year's challenges becomes a friendly money-rescue challenge.
+    if (l.age >= 18 && l.owed > 0) {
+      var rescue = C.filter(function (c) { return c.money; });
+      var mr = rescue[l.age % rescue.length];
+      var keep = chosen.filter(function (c) { return c.fixed && c.fixed.indexOf(l.age) >= 0; });
+      chosen = keep.concat(chosen.filter(function (c) { return keep.indexOf(c) < 0; })).slice(0, 2).concat([mr]);
+    }
     l.goals = chosen.slice(0, 3).map(function (c) { return { id: c.id, p: 0, n: c.track.n || 1, done: false }; });
     l.goalsAge = l.age;
     if (G.stage(l.age) === 'grand') G.unlock(l, 'all_stages');

@@ -162,6 +162,10 @@
     save();
     render();
     goalFeedback(res.goalsDone);
+    if (l && l.levelUps && l.levelUps.length) {
+      l.levelUps.forEach(function (u, k) { var sk = byId(BAL.SKILLS, u.id); setTimeout(function () { toast(sk.name + ' skill is now level ' + u.level + '! ⬆️', sk.emoji, 'good'); BAL.sound('sticker'); }, 400 + k * 300); });
+      l.levelUps = []; save();
+    }
     if (l && l.ended) endOfLife();
   }
 
@@ -269,7 +273,8 @@
   var MAX_CHARS = 12;
   function charStatus(l) {
     if (l.ended) return '🌟 Life story complete';
-    if (l.job) return G.job(l).emoji + ' ' + G.jobTitle(l);
+    if (l.job) return G.job(l).emoji + ' ' + G.jobTitle(l) + (G.jobCount(l) > 1 ? ' +' + (G.jobCount(l) - 1) : '');
+    if (l.business) return G.biz(l).emoji + ' Business owner';
     if (l.edu.course) return '🎓 Student';
     if (l.retired) return '🏖️ Retired';
     var sch = G.school(l);
@@ -494,6 +499,7 @@
     { id: 'people', name: 'Family & Friends', emoji: '❤️', color: '#F783AC' },
     { id: 'home', name: 'Home & Cars', emoji: '🏠', color: '#4DABF7' },
     { id: 'pets', name: 'Pets', emoji: '🐾', color: '#69DB7C' },
+    { id: 'money', name: 'Money', emoji: '🪙', color: '#F59F00' },
     { id: 'shop', name: 'Shop', emoji: '🛍️', color: '#9775FA' },
     { id: 'health', name: 'Health', emoji: '🏥', color: '#FF5D73' },
     { id: 'chores', name: 'Daily Jobs', emoji: '✅', color: '#20C997' },
@@ -514,6 +520,7 @@
       if (tb.id === 'school') { if (l.age >= 18 && !l.edu.course) { name = 'Work'; emoji = '💼'; } else if (l.age < 3) { name = 'Learning'; emoji = '🧸'; } }
       if (tb.id === 'chores' && choresLeft) badge = '<span class="badge">' + choresLeft + '</span>';
       if (tb.id === 'health' && l.sick) badge = '<span class="badge">!</span>';
+      if (tb.id === 'money' && l.owed > 0) badge = '<span class="badge">!</span>';
       return '<button class="tab' + (S.tab === tb.id ? ' on' : '') + '" data-act="tab"' + a('id', tb.id) + ' style="--tc:' + tb.color + '"><span class="tab-emoji">' + emoji + '</span><span class="tab-name">' + name + '</span>' + badge + '</button>';
     }).join('');
     var pips = '';
@@ -521,7 +528,7 @@
     var stats = BAL.STATS.map(function (s) {
       return '<div class="stat"><span class="stat-label">' + s.emoji + ' ' + s.name + '</span><span class="stat-num">' + l.stats[s.id] + '</span>' + bar(l.stats[s.id], s.color, s.name) + '</div>';
     }).join('');
-    var status = l.job ? G.job(l).emoji + ' ' + esc(G.jobTitle(l)) : l.edu.course ? '🎓 Student' : l.partTime ? byId(BAL.PART_TIME, l.partTime).emoji + ' ' + byId(BAL.PART_TIME, l.partTime).name : l.retired ? '🏖️ Retired' : (G.school(l) ? G.school(l).emoji + ' ' + G.school(l).label.split(' —')[0] : st.emoji + ' ' + st.name);
+    var status = l.job ? G.job(l).emoji + ' ' + esc(G.jobTitle(l)) : l.edu.course ? '🎓 Student' : l.business ? G.biz(l).emoji + ' ' + esc(G.biz(l).name) + ' owner' : (l.sideJobs || []).length ? byId(BAL.SIDE_JOBS, l.sideJobs[0].id).emoji + ' ' + byId(BAL.SIDE_JOBS, l.sideJobs[0].id).name : l.retired ? '🏖️ Retired' : (G.school(l) ? G.school(l).emoji + ' ' + G.school(l).label.split(' —')[0] : st.emoji + ' ' + st.name);
 
     return topbar() + '<main class="game">' +
       '<aside class="char card" style="--t1:' + t.colors[0] + ';--t2:' + t.colors[1] + '">' +
@@ -552,6 +559,7 @@
       case 'chores': return panelChores(l);
       case 'towns': return panelTowns(l);
       case 'story': return panelStory(l);
+      case 'money': return panelMoney(l);
       default: return panelActivities(l);
     }
   }
@@ -591,30 +599,38 @@
             (on ? btn('Leave', 'do', a('fn', 'leaveClub') + a('a1', c.id), 'small ghost') : btn('Join', 'do', a('fn', 'joinClub') + a('a1', c.id), 'small')) + '</div>';
         }).join('') + '</div>';
       }
-      if (l.age >= 13 && l.age < 18) {
-        out += '<h3 class="sub">💷 Part-time jobs <small>(earn coins, but you get 1 less ⚡ each year)</small></h3><div class="mini-grid">' + BAL.PART_TIME.map(function (p) {
-          var on = l.partTime === p.id;
-          return '<div class="mini-card' + (on ? ' on' : '') + '"><span class="mini-emoji">' + p.emoji + '</span><b>' + p.name + '</b><span>🪙 ' + p.pay + '/year</span>' +
-            (on ? btn('Stop', 'do', a('fn', 'quitPartTime'), 'small ghost') : (l.age >= p.minAge ? btn('Start', 'do', a('fn', 'partTime') + a('a1', p.id), 'small') : '<small class="muted">From age ' + p.minAge + '</small>')) + '</div>';
-        }).join('') + '</div>';
-      }
+      if (l.age >= 12 && l.age < 18) out += sideJobsSection(l);
+      if (l.age < 18) out += skillsSection(l);
       if (l.age < 18) out += '<div class="tip">💡 When you\'re 18 you can go to college or university, or start a job!</div>';
       if (!l.edu.course) return out;
     }
     // Grown-ups
     if (!sch) out += head('💼', 'Work & Learning', 'Your education: <b>' + BAL.EDU_LEVELS[l.edu.level] + '</b>');
     if (l.job) {
-      var j = G.job(l);
-      out += '<div class="info-card job"><span class="big-emoji">' + j.emoji + '</span><div class="grow"><b class="lg">' + esc(G.jobTitle(l)) + '</b><div>Pay: 🪙 ' + fmt(G.salary(l)) + ' a year · ' + l.job.years + ' year' + (l.job.years === 1 ? '' : 's') + ' here</div>' +
-        '<div class="perf"><span>Work bar</span>' + bar(l.job.perf, 'linear-gradient(90deg,#FFD43B,#FF9F1C)', 'Work performance') + '</div></div></div>' +
-        '<div class="btn-row">' + btn('💪 Work hard <small>⚡1</small>', 'do', a('fn', 'workHard'), 'primary') + btn('⬆️ Ask for promotion <small>⚡1</small>', 'do', a('fn', 'askPromotion')) +
-        (l.age >= 60 ? btn('🏖️ Retire', 'confirm', a('fn', 'retire')) : '') + btn('👋 Quit job', 'confirm', a('fn', 'quitJob'), 'ghost') + '</div>';
+      out += jobCard(l);
     } else if (!l.edu.course) {
-      out += '<div class="info-card"><span class="big-emoji">' + (l.retired ? '🏖️' : '🔍') + '</span><div>' + (l.retired ? '<b>You are retired!</b> Enjoy your hobbies. You can still take a job if you want.' : '<b>No job right now.</b> Pick one from the Job Centre below!') + '</div></div>';
+      out += '<div class="info-card"><span class="big-emoji">' + (l.retired ? '🏖️' : '🔍') + '</span><div>' + (l.retired ? '<b>You are retired!</b> Enjoy your hobbies. You can still take a job if you want.' : l.business ? '<b>You run your own business!</b> You can also take a full-time job or side jobs.' : '<b>No full-time job right now.</b> Apply at the Job Centre below — and try odd jobs in the 🪙 Money tab meanwhile!') + '</div></div>';
     }
     if (l.edu.course) {
       out += '<div class="tip">📚 While you are studying you get a small student grant each year. Finish your course to unlock better jobs!</div>';
     }
+    if (l.business) out += businessSection(l);
+    if (!l.edu.course) {
+      var t = G.town(l);
+      out += '<h3 class="sub">🏢 Job Centre <small>(full-time jobs · applying uses ⚡1)</small></h3><div class="job-grid">' + BAL.JOBS.map(function (jb) {
+        var chk = G.jobCheck(l, jb);
+        var reqs = [];
+        reqs.push('<span class="tag ' + (l.edu.level >= jb.edu ? 'ok' : 'no') + '">🎓 ' + BAL.EDU_LEVELS[jb.edu] + '</span>');
+        if (jb.smarts) reqs.push('<span class="tag ' + (l.stats.smarts >= jb.smarts ? 'ok' : 'no') + '">🧠 ' + jb.smarts + '+</span>');
+        if (jb.fitness) reqs.push('<span class="tag ' + (l.stats.fitness >= jb.fitness ? 'ok' : 'no') + '">💪 ' + jb.fitness + '+</span>');
+        if (jb.lvl) reqs.push(skillTag(l, jb.skill, jb.lvl));
+        if (jb.licence) reqs.push('<span class="tag ' + (l.licence ? 'ok' : 'no') + '">🪪 Licence</span>');
+        var mine = l.job && l.job.id === jb.id;
+        return '<div class="job-card' + (chk.ok ? ' can' : '') + (mine ? ' mine' : '') + '"><span class="job-emoji">' + jb.emoji + '</span><div class="grow"><b>' + jb.name + '</b><div class="pay">🪙 ' + fmt(jb.pay * t.pay) + ' / year</div><div class="reqs">' + reqs.join('') + '</div></div>' +
+          (mine ? '<span class="tag ok">Your job</span>' : btn(chk.ok ? 'Apply' : '🔒', 'do', a('fn', 'applyJob') + a('a1', jb.id), 'small' + (chk.ok ? ' primary' : ' ghost'))) + '</div>';
+      }).join('') + '</div>';
+    }
+    if (l.age >= 18) out += sideJobsSection(l) + skillsSection(l) + (l.business ? '' : businessSection(l));
     // Courses
     if (!l.edu.course && l.age >= 18) {
       var courses = ['college', 'uni'].map(function (id) {
@@ -624,19 +640,6 @@
           (done ? '<span class="tag ok">✓ Done</span>' : btn('Enrol', 'do', a('fn', 'enrol') + a('a1', id), 'small')) + '</div>';
       }).join('');
       out += '<h3 class="sub">🎓 Go back to learning</h3><div class="mini-grid two">' + courses + '</div>';
-    }
-    if (!l.edu.course) {
-      var t = G.town(l);
-      out += '<h3 class="sub">🏢 Job Centre <small>(applying uses ⚡1)</small></h3><div class="job-grid">' + BAL.JOBS.map(function (jb) {
-        var chk = G.jobCheck(l, jb);
-        var reqs = [];
-        reqs.push('<span class="tag ' + (l.edu.level >= jb.edu ? 'ok' : 'no') + '">🎓 ' + BAL.EDU_LEVELS[jb.edu] + '</span>');
-        if (jb.smarts) reqs.push('<span class="tag ' + (l.stats.smarts >= jb.smarts ? 'ok' : 'no') + '">🧠 ' + jb.smarts + '+</span>');
-        if (jb.fitness) reqs.push('<span class="tag ' + (l.stats.fitness >= jb.fitness ? 'ok' : 'no') + '">💪 ' + jb.fitness + '+</span>');
-        var mine = l.job && l.job.id === jb.id;
-        return '<div class="job-card' + (chk.ok ? ' can' : '') + (mine ? ' mine' : '') + '"><span class="job-emoji">' + jb.emoji + '</span><div class="grow"><b>' + jb.name + '</b><div class="pay">🪙 ' + fmt(jb.pay * t.pay) + ' / year</div><div class="reqs">' + reqs.join('') + '</div></div>' +
-          (mine ? '<span class="tag ok">Your job</span>' : btn(chk.ok ? 'Apply' : '🔒', 'do', a('fn', 'applyJob') + a('a1', jb.id), 'small' + (chk.ok ? ' primary' : ' ghost'))) + '</div>';
-      }).join('') + '</div>';
     }
     return out;
   }
@@ -744,22 +747,156 @@
     return out;
   }
 
+  function shopIntro(l) {
+    switch (S.shopCat) {
+      case 'groceries': return groceriesBlock(l);
+      case 'party': {
+        var got = (l.partyItems || []).map(function (id) { var it = byId(BAL.ITEMS, id); return it ? it.emoji : ''; }).join(' ');
+        return '<div class="tip">🎂 Plan your next birthday party! Everything you buy here is used at your birthday — the more party things, the happier you and your friends will be. ' + (got ? '<br><b>Party so far:</b> ' + got : '') + '</div>';
+      }
+      case 'home': case 'decor': return '<div class="tip">🏡 Furniture and decorations make your home cosy: every 2 you own give you extra happiness on each birthday (cosiness now: +' + G.cosiness(l) + ' 😊). They move with you!</div>';
+      case 'everyday': return '<div class="tip">🧴 Everyday shopping — the little things that keep you clean, healthy and ready for the day.</div>';
+      default: return '';
+    }
+  }
+
   function panelShop(l) {
     var cats = BAL.SHOP_CATS.map(function (c) { return '<button class="pick chip' + (S.shopCat === c.id ? ' on' : '') + '" data-act="shopCat"' + a('id', c.id) + '>' + c.emoji + ' ' + c.name + '</button>'; }).join('');
     var items = BAL.ITEMS.filter(function (it) { return it.cat === S.shopCat; }).map(function (it) {
-      var owned = !it.consumable && l.inventory.indexOf(it.id) >= 0;
+      var owned = it.party ? G.partyBought(l, it.id) : (!it.consumable && l.inventory.indexOf(it.id) >= 0);
       var price = G.itemPrice(l, it);
       return '<div class="shop-card' + (owned ? ' owned' : '') + '"><span class="shop-emoji">' + it.emoji + '</span><b>' + it.name + '</b><span class="shop-fx">' + fxChips(it.fx) + '</span>' +
-        (owned ? '<span class="tag ok">✓ Owned</span>' : btn('🪙 ' + fmt(price), 'do', a('fn', 'buyItem') + a('a1', it.id), 'small' + (l.coins >= price ? ' primary' : ' ghost'))) + '</div>';
+        (owned ? '<span class="tag ok">' + (it.party ? '🎉 Ready!' : '✓ Owned') + '</span>' : btn('🪙 ' + fmt(price), 'do', a('fn', 'buyItem') + a('a1', it.id), 'small' + (l.coins >= price ? ' primary' : ' ghost'))) + '</div>';
     }).join('');
     var stuff = l.inventory.map(function (id) { var it = byId(BAL.ITEMS, id); return it ? '<span title="' + esc(it.name) + '">' + it.emoji + '</span>' : ''; }).join('');
     return head('🛍️', 'The Shops', 'Spend your coins on fun things! You have 🪙 ' + fmt(l.coins) + '.') +
-      (l.age < 18 ? '<div class="tip">🐷 Earn coins from chores, birthdays, pocket money and part-time jobs.</div>' : '') +
-      '<div class="pick-row">' + cats + '</div><div class="shop-grid">' + items + '</div>' +
+      (l.age < 18 ? '<div class="tip">🐷 Earn coins from chores, birthdays, pocket money, odd jobs and part-time jobs.</div>' : '') +
+      '<div class="pick-row">' + cats + '</div>' + shopIntro(l) + '<div class="shop-grid">' + items + '</div>' +
       '<h3 class="sub">🎒 My Stuff</h3><div class="shelf">' + (stuff || '<span class="muted small">Nothing yet — go shopping!</span>') + '</div>' +
       '<h3 class="sub">🪞 Your look</h3><div class="info-card look-card"><div class="mini-full">' + BAL.avatar(l.look, l.age, l.stats.happy, { full: true }) + '</div><div class="grow"><b>Changing your clothes, hair and accessories is always free!</b>' +
       '<div class="small muted">Special items (✨ Sparkly Crown, Superhero Cape, Golden Trainers) are unlocked by buying them in the Clothes department.</div></div>' +
       btn('🪞 Change Your Look', 'changeLook', '', 'primary') + '</div>';
+  }
+
+  /* ---------- Economy panels ---------- */
+  function skillTag(l, skill, lvl) {
+    var s = byId(BAL.SKILLS, skill); if (!s || !lvl) return '';
+    return '<span class="tag ' + (G.skillLevel(l, skill) >= lvl ? 'ok' : 'no') + '">' + s.emoji + ' ' + s.name + ' ' + lvl + '+</span>';
+  }
+
+  function skillsSection(l) {
+    if (l.age < 6) return '';
+    var paidCost = l.age < 18 ? 20 : G.classCost(l);
+    return '<h3 class="sub">🛠️ Your skills <small>(jobs need skills — higher skills mean more pay and fewer mistakes)</small></h3><div class="skills-grid">' +
+      BAL.SKILLS.map(function (s) {
+        var v = l.skills[s.id] || 0, lv = G.skillLevel(l, s.id);
+        return '<div class="skill"><div class="skill-top"><span class="skill-emoji">' + s.emoji + '</span><b>' + s.name + '</b><span class="skill-lvl">Lv ' + lv + '</span></div>' +
+          bar(v, 'linear-gradient(90deg,#74C0FC,#7B61FF)', s.name + ' skill') +
+          '<div class="btn-row">' + btn('📖 Library <small>free ⚡1</small>', 'do', a('fn', 'learnSkill') + a('a1', s.id), 'small') +
+          btn('🎓 Class <small>🪙' + fmt(paidCost) + ' ⚡1</small>', 'do', a('fn', 'learnSkill') + a('a1', s.id) + a('a2', '1'), 'small ghost') + '</div></div>';
+      }).join('') + '</div>';
+  }
+
+  function sideJobsSection(l) {
+    var mine = l.sideJobs || [];
+    var max = l.age < 18 ? 2 : BAL.MAX_JOBS;
+    var out = '<h3 class="sub">🧺 ' + (l.age < 18 ? 'Part-time jobs' : 'Side jobs') + ' <small>(you can have more than one job! ' + G.jobCount(l) + ' / ' + max + ' jobs · each job uses 1 ⚡ of your yearly energy)</small></h3>';
+    if (mine.length) out += '<div class="mini-grid">' + mine.map(function (x) {
+      var sj = byId(BAL.SIDE_JOBS, x.id);
+      return '<div class="mini-card on"><span class="mini-emoji">' + sj.emoji + '</span><b>' + sj.name + '</b><small>🪙 ' + fmt(G.shiftPay(l, sj)) + ' per shift · ' + x.shifts + ' shifts done</small>' +
+        btn('🕒 Work a shift <small>⚡1</small>', 'do', a('fn', 'workShift') + a('a1', x.id), 'small primary') + btn('Leave', 'do', a('fn', 'quitSideJob') + a('a1', x.id), 'small ghost') + '</div>';
+    }).join('') + '</div>';
+    var avail = BAL.SIDE_JOBS.filter(function (sj) { return l.age >= sj.minAge - 1 && l.age <= sj.maxAge && !mine.some(function (x) { return x.id === sj.id; }); });
+    if (avail.length) out += '<div class="mini-grid">' + avail.map(function (sj) {
+      var why = l.age < sj.minAge ? 'From age ' + sj.minAge : (sj.edu && l.edu.level < sj.edu ? 'Needs ' + BAL.EDU_LEVELS[sj.edu] : (sj.fitness && l.stats.fitness < sj.fitness ? 'Needs ' + sj.fitness + ' 💪' : ''));
+      return '<div class="mini-card"><span class="mini-emoji">' + sj.emoji + '</span><b>' + sj.name + '</b><small>🪙 ' + fmt(G.shiftPay(l, sj)) + ' per shift</small>' +
+        (why ? '<small class="muted">' + why + '</small>' : btn('Start', 'do', a('fn', 'takeSideJob') + a('a1', sj.id), 'small')) + '</div>';
+    }).join('') + '</div>';
+    return out;
+  }
+
+  function businessSection(l) {
+    if (l.age < 18) return '';
+    if (l.business) {
+      var b = G.biz(l), bz = l.business;
+      var top = bz.level >= BAL.BIZ_LEVELS.length - 1;
+      return '<h3 class="sub">🏪 Your business</h3><div class="info-card biz"><span class="big-emoji">' + b.emoji + '</span><div class="grow"><b class="lg">' + esc(G.bizName(l)) + '</b>' +
+        '<div>Expected profit this year: 🪙 ' + fmt(G.bizProfitEstimate(l)) + (bz.years ? ' · last year: 🪙 ' + fmt(bz.lastProfit) : '') + '</div>' +
+        '<div class="perf"><span>Effort bar</span>' + bar(bz.effort, 'linear-gradient(90deg,#69DB7C,#20C997)', 'Business effort') + '</div></div></div>' +
+        '<div class="btn-row">' + btn('💪 Work on the business <small>⚡1</small>', 'do', a('fn', 'workBusiness'), 'primary') +
+        (top ? '' : btn('📈 Grow it <small>🪙' + fmt(G.bizGrowCost(l)) + '</small>', 'do', a('fn', 'growBusiness'))) +
+        btn('🤝 Sell <small>🪙' + fmt(G.bizValue(l)) + '</small>', 'confirm', a('fn', 'sellBusiness'), 'ghost') + '</div>';
+    }
+    return '<h3 class="sub">🏪 Start your own business <small>(be a Business Owner! profit depends on your effort and skills)</small></h3><div class="mini-grid">' + BAL.BUSINESSES.map(function (b) {
+      var cost = G.bizStartCost(l, b);
+      return '<div class="mini-card"><span class="mini-emoji">' + b.emoji + '</span><b>' + b.name + '</b><small>Start-up: 🪙 ' + fmt(cost) + '</small><small>Profit from about 🪙 ' + fmt(G.price(l, b.profit) * 0.6) + '/yr</small>' +
+        btn('Open', 'confirm', a('fn', 'startBusiness') + a('a1', b.id), 'small' + (l.coins >= cost ? ' primary' : ' ghost')) + '</div>';
+    }).join('') + '</div>';
+  }
+
+  function jobCard(l) {
+    var j = G.job(l), base = G.salary(l);
+    var warn = l.job.warnings ? '<div class="warn">⚠️ Your boss has given you a warning. Keep your work bar above 15 or you could lose this job!</div>' : '';
+    return '<div class="info-card job"><span class="big-emoji">' + j.emoji + '</span><div class="grow"><b class="lg">' + esc(G.jobTitle(l)) + '</b>' +
+      '<div>Salary: 🪙 ' + fmt(base) + ' a year' + (G.jobSkillBonus(l) ? ' <span class="tag ok">+' + Math.round(G.jobSkillBonus(l) * 100) + '% skill bonus</span>' : '') + ' · ' + l.job.years + ' year' + (l.job.years === 1 ? '' : 's') + ' here</div>' +
+      '<div class="perf"><span>Work bar ' + (l.job.perf >= 80 ? '🎁 bonus on payday!' : '') + '</span>' + bar(l.job.perf, 'linear-gradient(90deg,#FFD43B,#FF9F1C)', 'Work performance') + '</div>' +
+      (l.job.deductions ? '<div class="small neg">🙈 ' + fmt(l.job.deductions) + ' coins will come off your pay for mistakes this year.</div>' : '') + warn + '</div></div>' +
+      '<div class="btn-row">' + btn('💪 Work hard <small>⚡1</small>', 'do', a('fn', 'workHard'), 'primary') + btn('⬆️ Ask for promotion <small>⚡1</small>', 'do', a('fn', 'askPromotion')) +
+      (l.age >= 60 ? btn('🏖️ Retire', 'confirm', a('fn', 'retire')) : '') + btn('👋 Quit job', 'confirm', a('fn', 'quitJob'), 'ghost') + '</div>' +
+      '<p class="small muted">💡 Work hard to fill your work bar: above 80 earns a bonus on payday, and promotions need 70+. Mistakes cost a little pay — higher skills mean fewer mistakes.</p>';
+  }
+
+  function panelMoney(l) {
+    var lines = G.yearlyMoney(l);
+    var inc = lines.filter(function (m) { return m.v > 0; }), out = lines.filter(function (m) { return m.v < 0; });
+    var net = lines.reduce(function (s, m) { return s + m.v; }, 0);
+    var row = function (m) { return '<li><span>' + m.e + ' ' + esc(m.t) + '</span><b class="' + (m.v < 0 ? 'neg' : 'pos') + '">' + (m.v > 0 ? '+' : '') + fmt(m.v) + '</b></li>'; };
+    var trouble = l.owed > 0 || (l.age >= 18 && l.coins + net < 0);
+    var html = head('🪙', 'Money', 'Coins are pretend — but managing them is a real skill!') +
+      '<div class="wallet"><div class="wallet-coins"><small>Your coins</small><b>🪙 ' + fmt(l.coins) + '</b></div>' +
+      (l.owed ? '<div class="wallet-owed"><small>Money owed</small><b>💸 ' + fmt(l.owed) + '</b><small>no interest</small></div>' : '') +
+      '<div class="wallet-net"><small>On your next birthday</small><b class="' + (net < 0 ? 'neg' : 'pos') + '">' + (net >= 0 ? '+' : '') + fmt(net) + '</b></div></div>';
+    if (trouble) {
+      html += '<div class="rescue"><h3>🛟 Money Rescue Plan</h3><p>' + (l.owed ? 'You owe <b>' + fmt(l.owed) + ' coins</b>. ' : 'Your bills are bigger than your income this year. ') + 'Don\'t worry — here\'s how to get back on track:</p><ol class="rescue-steps">' +
+        '<li>🧹 <b>Do odd jobs</b> below for quick coins.</li>' +
+        '<li>💼 <b>Find a job or add a side job</b> in the Work tab.</li>' +
+        '<li>🪧 <b>Sell things</b> you don\'t need at the car boot sale below — or sell a car or a business.</li>' +
+        '<li>🏠 <b>Move somewhere cheaper</b> — a tiny flat, or back with family (Home tab).</li>' +
+        '<li>🛒 <b>Choose the Budget Basket</b> for groceries.</li>' +
+        '<li>🤝 <b>Ask family or friends for help</b> (once a year).</li></ol>' +
+        '<div class="btn-row">' + (l.owed ? (l.coins ? btn('💸 Pay back ' + fmt(Math.min(l.owed, l.coins)) + ' coins', 'do', a('fn', 'payBack'), 'primary') : '<span class="tag">💸 Earn some coins first, then pay back here</span>') : '') +
+        (G.canAskFamily(l) ? btn('🤝 Ask family for help', 'do', a('fn', 'askFamily'), 'pink') : '') +
+        btn('💼 Go to Work tab', 'tab', a('id', 'school')) + '</div></div>';
+    } else if (l.age >= 18 && G.canAskFamily(l)) {
+      html += '<div class="tip">💡 Running low? You can ' + btn('🤝 Ask family for help', 'do', a('fn', 'askFamily'), 'small') + ' once a year.</div>';
+    }
+    html += '<h3 class="sub">📊 Where your money goes <small>(this is what will happen on your next birthday)</small></h3><div class="money-cols">' +
+      '<div class="money-col"><h4>💰 Coming in</h4><ul class="money-list">' + (inc.map(row).join('') || '<li class="muted">Nothing yet</li>') + '</ul></div>' +
+      '<div class="money-col"><h4>🧾 Going out</h4><ul class="money-list">' + (out.map(row).join('') || '<li class="muted">No bills — your family looks after you! 💛</li>') + '</ul></div></div>';
+    var odd = G.oddJobs(l);
+    html += '<h3 class="sub">🧹 Odd jobs <small>(always available · ⚡1 each · paid straight away)</small></h3>';
+    html += odd.length ? '<div class="mini-grid">' + odd.map(function (o) {
+      var m = G.oddJobMult(l);
+      return '<div class="mini-card"><span class="mini-emoji">' + o.emoji + '</span><b>' + o.name + '</b><small>🪙 ' + fmt(o.pay[0] * m) + '–' + fmt(o.pay[1] * m) + '</small>' + btn('Do it', 'do', a('fn', 'oddJob') + a('a1', o.id), 'small primary') + '</div>';
+    }).join('') + '</div>' : '<div class="tip">🧸 Odd jobs start at age 8. Until then, help with chores for pocket money!</div>';
+    var sellable = l.inventory.filter(function (id, i, arr) { return arr.indexOf(id) === i && byId(BAL.ITEMS, id); });
+    if (sellable.length) html += '<h3 class="sub">🪧 Car boot sale <small>(sell things for half price)</small></h3><div class="mini-grid">' + sellable.map(function (id) {
+      var it = byId(BAL.ITEMS, id), v = Math.max(1, Math.round(G.itemPrice(l, it) * 0.5));
+      return '<div class="mini-card"><span class="mini-emoji">' + it.emoji + '</span><b>' + esc(it.name) + '</b>' + btn('Sell 🪙' + fmt(v), 'do', a('fn', 'sellItem') + a('a1', id), 'small ghost') + '</div>';
+    }).join('') + '</div>';
+    html += '<div class="tip">🐷 <b>Money tips:</b> save a little every year, compare prices, buy what you need before what you want, and learn skills to earn more.</div>';
+    return html;
+  }
+
+  function groceriesBlock(l) {
+    if (!G.needsGroceries(l)) return '<div class="tip">🛒 ' + (l.age < 18 ? 'Your family does the big food shop — but you can buy snacks and treats!' : 'You live with your family and chip in for food. Move out to choose your own groceries!') + '</div>';
+    var picked = l.groceries;
+    return '<h3 class="sub">🧺 This year\'s food shop <small>(for ' + (G.householdSize(l) > 1 ? 'your whole household' : 'you') + ' · includes everyday essentials · if you don\'t choose, a Budget Basket is paid on your birthday)</small></h3><div class="mini-grid">' +
+      BAL.GROCERY_BASKETS.map(function (bk) {
+        var cost = G.groceryCost(l, bk), on = picked === bk.id;
+        return '<div class="mini-card' + (on ? ' on' : '') + '"><span class="mini-emoji">' + bk.emoji + '</span><b>' + bk.name + '</b><small>' + bk.desc + '</small><span>' + fxChips(bk.fx) + '</span>' +
+          (on ? '<span class="tag ok">✓ Bought</span>' : picked ? '' : btn('🪙 ' + fmt(cost), 'do', a('fn', 'buyGroceries') + a('a1', bk.id), 'small' + (l.coins >= cost ? ' primary' : ' ghost'))) + '</div>';
+      }).join('') + '</div><h3 class="sub">🥪 Snacks & treats</h3>';
   }
 
   function panelHealth(l) {
@@ -1027,8 +1164,9 @@
     openModal({ cls: 'birthday', title: rep.ended ? 'Happy ' + l.age + 'th Birthday!' : '🎉 Happy Birthday, ' + esc(l.name) + '! 🎉',
       html: cake + '<p class="lead">You are now <b>' + l.age + '</b> year' + (l.age === 1 ? '' : 's') + ' old!</p>' +
         '<p class="gift">🎁 You got ' + esc(rep.gift.item) + (rep.gift.coins ? ' and <b>' + rep.gift.coins + ' coins</b> from your family!' : '!') + '</p>' +
+        (rep.party ? '<p class="gift">🥳 Your party had ' + esc(rep.party.join(', ')) + '!</p>' : '') +
         (lines ? '<ul class="year-lines">' + lines + '</ul>' : '') + moneyHtml,
-      buttons: rep.newGroup && !rep.ended ? [{ label: 'Yay! 🎈' }, { label: '🪞 Style my new look', cls: 'pink', fn: function () { S.queue.length = 0; startLookEditor('clothes'); } }] : [{ label: 'Yay! 🎈' }],
+      buttons: rep.moneyTrouble && !rep.ended ? [{ label: 'OK' }, { label: '🛟 See my money rescue plan', cls: 'pink', fn: function () { S.queue.length = 0; S.tab = 'money'; } }] : rep.newGroup && !rep.ended ? [{ label: 'Yay! 🎈' }, { label: '🪞 Style my new look', cls: 'pink', fn: function () { S.queue.length = 0; startLookEditor('clothes'); } }] : [{ label: 'Yay! 🎈' }],
       onOpen: function () { BAL.sound('birthday'); confetti(true); floaty('🎈'); } });
     rep.celebrations.forEach(function (c) {
       openModal({ emoji: c.e, title: esc(c.t), html: '<p class="lead">' + esc(c.d) + '</p>', buttons: [{ label: 'Hooray! 🎉' }], onOpen: function () { BAL.sound('tada'); confetti(false); } });
@@ -1078,6 +1216,8 @@
     separate: ['🍂', 'Go separate ways?', 'Sometimes people are happier apart. You\'ll stay friends.'],
     rehomePet: ['🌾', 'Find your pet a new home?', 'They will go to live on a lovely farm with a kind family.'],
     buyHome: ['🔑', 'Buy this home?', ''],
+    startBusiness: ['🏪', 'Open your own business?', ''],
+    sellBusiness: ['🤝', 'Sell your business?', 'You\'ll get coins for it, and have more time and energy for other things.'],
     moveTown: ['🧳', 'Move to a new town?', '']
   };
 
@@ -1163,6 +1303,7 @@
         var cf = CONFIRMS[d('fn')] || ['❓', 'Are you sure?', ''];
         var text = cf[2], fn2 = d('fn'), arg = d('a1');
         if (fn2 === 'buyHome') { var hm = byId(BAL.HOMES, arg), pr = G.price(l, hm.price); text = hm.emoji + ' <b>' + hm.name + '</b> costs 🪙 ' + fmt(pr) + '. You pay 🪙 ' + fmt(pr * BAL.HOME_DEPOSIT) + ' now, then 🪙 ' + fmt(Math.ceil(pr * (1 - BAL.HOME_DEPOSIT) / BAL.HOME_LOAN_YEARS)) + ' a year for 20 years.'; }
+        if (fn2 === 'startBusiness') { var bz = byId(BAL.BUSINESSES, arg); text = bz.emoji + ' <b>' + bz.name + '</b> costs 🪙 ' + fmt(G.bizStartCost(l, bz)) + ' to start. You\'ll begin with a market stall, earn profit every birthday, and can grow it into a chain of shops!'; }
         if (fn2 === 'moveTown') { var tw = byId(BAL.TOWNS, arg); text = 'Move to ' + tw.emoji + ' <b>' + esc(tw.name) + '</b>? It costs 🪙 ' + fmt(500 * tw.price) + ' to move.'; }
         openModal({ emoji: cf[0], title: cf[1], html: '<p>' + text + '</p>', buttons: [{ label: 'Yes!', fn: function () { act(fn2, arg); } }, { label: 'No', cls: 'ghost' }] });
         break;
@@ -1221,7 +1362,8 @@
       '<li><span>😊</span> Keep your <b>Happiness, Health, Smarts and Fitness</b> high!</li>' +
       '<li><span>✅</span> Finish your <b>Daily Jobs</b> each year for a bonus.</li>' +
       '<li><span>🏫</span> Go to school, then college or university, then get a job you love.</li>' +
-      '<li><span>🪙</span> Save coins to buy things, homes and cars. Coins are pretend — no real money!</li>' +
+      '<li><span>🪙</span> Earn coins from jobs (you can have up to 3!), side jobs, odd jobs or your own business. Spend them on food, homes, cars, furniture, pets, toys and parties. Coins are pretend — no real money!</li>' +
+      '<li><span>🛟</span> Run out of coins? Don\'t panic — the 🪙 Money tab has a rescue plan, and there are always odd jobs to do.</li>' +
       '<li><span>🐾</span> Adopt pets, make friends, fall in love and build a family.</li>' +
       '<li><span>🪞</span> Tap <b>Change Your Look</b> to change clothes, hair and accessories any time — it\'s free!</li>' +
       '<li><span>🧑‍🤝‍🧑</span> Each player can save lots of <b>characters</b>, and every character has their own life.</li>' +
